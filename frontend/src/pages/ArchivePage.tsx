@@ -1,1 +1,60 @@
-﻿export default function ArchivePage() { return <div className='p-8'><h1 className='text-2xl font-bold'>Архив</h1></div> }
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getArchive, getChatMessages, unarchiveChat } from '@/api/externalChats'
+import { useChatStore } from '@/store/chatStore'
+import ChatList from '@/components/ChatList/ChatList'
+import ChatWindow from '@/components/ChatWindow/ChatWindow'
+import ClientProfile from '@/components/ClientProfile/ClientProfile'
+import styles from './ArchivePage.module.css'
+
+export default function ArchivePage() {
+  const queryClient = useQueryClient()
+
+  const activeId = useChatStore((s) => s.activeExternalChatId)
+  const setActive = useChatStore((s) => s.setActiveExternalChat)
+  const messages = useChatStore((s) => s.externalMessages)
+  const setMessages = useChatStore((s) => s.setExternalMessages)
+  const showProfile = useChatStore((s) => s.showClientProfile)
+  const toggleProfile = useChatStore((s) => s.toggleClientProfile)
+
+  const { data: chats = [] } = useQuery({
+    queryKey: ['archive-chats'],
+    queryFn: () => getArchive(),
+  })
+
+  useEffect(() => {
+    if (!activeId || messages[activeId]) return
+    getChatMessages(activeId).then((msgs) => setMessages(activeId, msgs))
+  }, [activeId, messages, setMessages])
+
+  const activeChat = chats.find((c) => c.id === activeId) ?? null
+
+  async function handleUnarchive() {
+    if (!activeId) return
+    await unarchiveChat(activeId)
+    queryClient.invalidateQueries({ queryKey: ['archive-chats'] })
+    setActive(null)
+  }
+
+  return (
+    <div className={styles.page}>
+      <ChatList
+        chats={chats}
+        activeChatId={activeId}
+        title="Архив"
+        onSelect={setActive}
+      />
+      <ChatWindow
+        chat={activeChat}
+        messages={activeId ? (messages[activeId] ?? []) : []}
+        readOnly
+        onSend={async () => {}}
+        onProfileClick={toggleProfile}
+        onArchive={handleUnarchive}
+      />
+      {showProfile && activeChat && (
+        <ClientProfile client={activeChat.client} onClose={toggleProfile} />
+      )}
+    </div>
+  )
+}

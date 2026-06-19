@@ -7,14 +7,15 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import engine, Base
+import app.models  # noqa: F401 — registers all models in Base.metadata
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create upload directory
     os.makedirs(settings.upload_dir, exist_ok=True)
 
-    # Create DB tables (dev only — production uses alembic)
+    # Dev convenience: create tables if they don't exist yet.
+    # In production, run: docker compose exec backend alembic upgrade head
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
