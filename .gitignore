@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+node_modules/
+dist/
+build/
+.baileys_session/
+uploads/
+*.log
+.DS_Store

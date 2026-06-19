@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fc_crm
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_user -d fc_crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://crm_user:${POSTGRES_PASSWORD}@postgres:5432/fc_crm
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_DAYS: 7
+      WA_BRIDGE_URL: http://wa-bridge:3001
+      WA_BRIDGE_TOKEN: ${WA_BRIDGE_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      UPLOAD_DIR: /app/uploads
+      MAX_FILE_SIZE_MB: 20
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "8000:8000"
+
+  wa-bridge:
+    build: ./wa-bridge
+    restart: unless-stopped
+    environment:
+      FASTAPI_URL: http://backend:8000
+      FASTAPI_WEBHOOK_TOKEN: ${WA_BRIDGE_TOKEN}
+      PORT: 3001
+    volumes:
+      - wa_session:/app/.baileys_session
+    ports:
+      - "3001:3001"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:
+  uploads_data:
+  wa_session:
