@@ -31,11 +31,11 @@ export async function getInternalMessages(
 
 export async function sendInternalMessage(
   chatId: number,
-  payload: { content?: string; fileId?: number }
+  payload: { content?: string; fileId?: number; isForwarded?: boolean }
 ): Promise<InternalMessage> {
   const { data } = await client.post<InternalMessage>(
     `/internal/chats/${chatId}/send`,
-    { content: payload.content, file_id: payload.fileId }
+    { content: payload.content, file_id: payload.fileId, is_forwarded: payload.isForwarded ?? false }
   )
   return data
 }

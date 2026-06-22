@@ -6,18 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.database import engine, Base
 import app.models  # noqa: F401 — registers all models in Base.metadata
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs(settings.upload_dir, exist_ok=True)
-
-    # Dev convenience: create tables if they don't exist yet.
-    # In production, run: docker compose exec backend alembic upgrade head
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
     # Start Telegram bot
     from app.telegram.bot import start_bot, stop_bot

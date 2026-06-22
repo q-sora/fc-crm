@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import type { ExternalChat } from '@/types'
 import ChatListItem from './ChatListItem'
+import IconSearch from '@/components/icons/IconSearch'
 import styles from './ChatList.module.css'
 
 interface Props {
   chats: ExternalChat[]
   activeChatId: number | null
   title: string
+  unreadCounts?: Record<number, number>
   onSelect: (id: number) => void
 }
 
-export default function ChatList({ chats, activeChatId, title, onSelect }: Props) {
+export default function ChatList({ chats, activeChatId, title, unreadCounts = {}, onSelect }: Props) {
   const [search, setSearch] = useState('')
 
   const filtered = chats.filter((c) => {
@@ -27,7 +29,7 @@ export default function ChatList({ chats, activeChatId, title, onSelect }: Props
       <div className={styles.header}>
         <div className={styles.title}>{title}</div>
         <div className={styles.searchWrapper}>
-          <span className={styles.searchIcon}>🔍</span>
+          <span className={styles.searchIcon}><IconSearch size={16} /></span>
           <input
             className={styles.search}
             type="text"
@@ -47,6 +49,7 @@ export default function ChatList({ chats, activeChatId, title, onSelect }: Props
             key={chat.id}
             chat={chat}
             isActive={chat.id === activeChatId}
+            unreadCount={unreadCounts[chat.id] ?? 0}
             onClick={() => onSelect(chat.id)}
           />
         ))}

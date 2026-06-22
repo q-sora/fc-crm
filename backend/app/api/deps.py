@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.user import User, UserRole
@@ -22,7 +23,11 @@ async def get_current_user(
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    user = await db.scalar(select(User).where(User.id == user_id, User.is_active == True))  # noqa: E712
+    user = await db.scalar(
+        select(User)
+        .options(selectinload(User.organizations))
+        .where(User.id == user_id, User.is_active == True)  # noqa: E712
+    )
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
     return user

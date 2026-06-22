@@ -45,6 +45,7 @@ def _build_msg_response(msg: InternalMessage, sender: User, file: File | None) -
         content=msg.content,
         message_type=msg.message_type,
         file=file_short,
+        is_forwarded=msg.is_forwarded,
         sent_at=msg.sent_at,
     )
 
@@ -216,6 +217,7 @@ async def send_message(
         content=body.content,
         message_type=msg_type,
         file_id=body.file_id,
+        is_forwarded=body.is_forwarded,
     )
     db.add(msg)
     await db.commit()
@@ -234,11 +236,18 @@ async def send_message(
         "chatId": chat_id,
         "message": {
             "id": msg.id,
+            "chatId": chat_id,
             "senderId": current_user.id,
             "senderName": current_user.name,
             "content": body.content,
             "messageType": msg_type.value,
-            "fileId": body.file_id,
+            "isForwarded": body.is_forwarded,
+            "file": {
+                "id": file_record.id,
+                "originalName": file_record.original_name,
+                "mimeType": file_record.mime_type,
+                "url": _file_url(file_record.stored_path),
+            } if file_record else None,
             "sentAt": msg.sent_at.isoformat(),
         },
     }

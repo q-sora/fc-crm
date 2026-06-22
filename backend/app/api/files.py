@@ -15,6 +15,7 @@ from app.api.deps import get_current_user
 router = APIRouter()
 
 MAX_BYTES = settings.max_file_size_mb * 1024 * 1024
+CHUNK = 1024 * 1024  # 1 MB
 
 
 def _file_url(stored_name: str) -> str:
@@ -38,25 +39,34 @@ async def upload_file(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    content = await file.read()
-    if len(content) > MAX_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds {settings.max_file_size_mb} MB limit",
-        )
-
     ext = os.path.splitext(file.filename or "")[1]
     stored_name = f"{uuid.uuid4().hex}{ext}"
     stored_path = os.path.join(settings.upload_dir, stored_name)
 
-    async with aiofiles.open(stored_path, "wb") as f_out:
-        await f_out.write(content)
+    total = 0
+    try:
+        async with aiofiles.open(stored_path, "wb") as f_out:
+            while True:
+                chunk = await file.read(CHUNK)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File exceeds {settings.max_file_size_mb} MB limit",
+                    )
+                await f_out.write(chunk)
+    except HTTPException:
+        if os.path.exists(stored_path):
+            os.unlink(stored_path)
+        raise
 
     record = File(
         original_name=file.filename or "file",
         stored_path=stored_name,
         mime_type=file.content_type or "application/octet-stream",
-        size=len(content),
+        size=total,
         uploaded_by=current_user.id,
     )
     db.add(record)

@@ -1,19 +1,27 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import { useChatStore } from '@/store/chatStore'
 import { disconnectWs } from '@/socket/socket'
+import IconChats from '@/components/icons/IconChats'
+import IconTeam from '@/components/icons/IconTeam'
+import IconArchive from '@/components/icons/IconArchive'
+import IconAdmin from '@/components/icons/IconAdmin'
+import IconLogout from '@/components/icons/IconLogout'
+import IconUser from '@/components/icons/IconUser'
 import styles from './Sidebar.module.css'
-
-const NAV_ITEMS = [
-  { path: '/chats/external', icon: '💬', label: 'Клиенты' },
-  { path: '/chats/internal', icon: '👥', label: 'Команда' },
-  { path: '/chats/archive', icon: '🗂', label: 'Архив' },
-]
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const user = useAuthStore((s) => s.user)
   const clearAuth = useAuthStore((s) => s.clearAuth)
+  const isAdmin = user?.role === 'admin'
+
+  const unreadExternal = useChatStore((s) => s.unreadExternal)
+  const unreadInternal = useChatStore((s) => s.unreadInternal)
+
+  const totalExternal = Object.values(unreadExternal).reduce((a, b) => a + b, 0)
+  const totalInternal = Object.values(unreadInternal).reduce((a, b) => a + b, 0)
 
   function handleLogout() {
     disconnectWs()
@@ -22,11 +30,17 @@ export default function Sidebar() {
   }
 
   const initials = user?.name
-    .split(' ')
+    ?.split(' ')
     .slice(0, 2)
-    .map((w) => w[0])
+    .map((w) => w[0] ?? '')
     .join('')
-    .toUpperCase() ?? '?'
+    .toUpperCase() || null
+
+  const NAV_ITEMS = [
+    { path: '/chats/external', icon: <IconChats />, label: 'Клиенты', badge: totalExternal },
+    { path: '/chats/internal', icon: <IconTeam />, label: 'Команда', badge: totalInternal },
+    { path: '/chats/archive', icon: <IconArchive />, label: 'Архив', badge: 0 },
+  ]
 
   return (
     <aside className={styles.sidebar}>
@@ -40,17 +54,36 @@ export default function Sidebar() {
             onClick={() => navigate(item.path)}
             title={item.label}
           >
-            <span className={styles.navIcon}>{item.icon}</span>
+            <span className={styles.navIconWrap}>
+              <span className={styles.navIcon}>{item.icon}</span>
+              {item.badge > 0 && (
+                <span className={styles.navBadge}>{item.badge > 99 ? '99+' : item.badge}</span>
+              )}
+            </span>
             {item.label}
           </button>
         ))}
+        {isAdmin && (
+          <button
+            className={`${styles.navItem} ${pathname.startsWith('/admin') ? styles.active : ''}`}
+            onClick={() => navigate('/admin')}
+            title="Админ панель"
+          >
+            <span className={styles.navIconWrap}>
+              <span className={styles.navIcon}><IconAdmin /></span>
+            </span>
+            Админ
+          </button>
+        )}
       </nav>
 
       <div className={styles.bottomSection}>
         <div className={styles.divider} />
-        <div className={styles.avatarBtn} title={user?.name}>{initials}</div>
+        <div className={styles.avatarBtn} title={user?.name}>
+          {initials ?? <IconUser size={20} />}
+        </div>
         <button className={styles.logoutBtn} onClick={handleLogout} title="Выйти">
-          <span className={styles.logoutIcon}>🚪</span>
+          <span className={styles.logoutIcon}><IconLogout /></span>
           Выйти
         </button>
       </div>

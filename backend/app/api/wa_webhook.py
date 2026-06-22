@@ -2,7 +2,11 @@
 Internal endpoint called by wa-bridge (Node.js) when a WhatsApp message arrives.
 Protected by a shared secret token, not by user JWT.
 """
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+import os
+import uuid
+
+import aiofiles
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +39,46 @@ class WAWebhookBody(BaseModel):
     data: WAMessagePayload
 
 
+_MIME_EXT: dict[str, str] = {
+    'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
+    'image/webp': '.webp', 'audio/ogg': '.ogg', 'audio/mpeg': '.mp3',
+    'audio/mp4': '.m4a', 'video/mp4': '.mp4', 'video/webm': '.webm',
+    'application/pdf': '.pdf',
+}
+
+
+@router.post("/files/upload", status_code=status.HTTP_201_CREATED, dependencies=[Depends(_verify_token)])
+async def upload_wa_file(
+    request: Request,
+    filename: str = Query("file"),
+    mime_type: str = Query("application/octet-stream"),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty body")
+
+    from app.models.file import File
+    ext = _MIME_EXT.get(mime_type) or os.path.splitext(filename)[1]
+    stored_name = f"{uuid.uuid4().hex}{ext}"
+    stored_path = os.path.join(settings.upload_dir, stored_name)
+
+    async with aiofiles.open(stored_path, "wb") as f:
+        await f.write(data)
+
+    record = File(
+        original_name=filename,
+        stored_path=stored_name,
+        mime_type=mime_type,
+        size=len(data),
+        uploaded_by=None,
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+    return {"file_id": record.id}
+
+
 @router.post("/wa-webhook", dependencies=[Depends(_verify_token)])
 async def wa_webhook(body: WAWebhookBody, db: AsyncSession = Depends(get_db)):
     if body.event != "message":
@@ -57,6 +101,9 @@ async def wa_webhook(body: WAWebhookBody, db: AsyncSession = Depends(get_db)):
     )
 
     if reply:
-        await send_wa_text(msg.phone, reply)
+        try:
+            await send_wa_text(msg.phone, reply)
+        except Exception as exc:
+            print(f"[wa-webhook] failed to send reply to {msg.phone}: {exc}")
 
     return {"ok": True}

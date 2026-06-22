@@ -1,4 +1,7 @@
 import type { ExternalChat } from '@/types'
+import IconUser from '@/components/icons/IconUser'
+import IconArchive from '@/components/icons/IconArchive'
+import IconUnarchive from '@/components/icons/IconUnarchive'
 import styles from './ChatHeader.module.css'
 
 interface Props {
@@ -41,14 +44,14 @@ export default function ChatHeader({ chat, onProfileClick, onArchive, isArchived
           onClick={onProfileClick}
           title="Профиль клиента"
         >
-          👤
+          <IconUser size={18} />
         </button>
         <button
           className={styles.actionBtn}
           onClick={onArchive}
           title={isArchived ? 'Разархивировать' : 'Архивировать'}
         >
-          {isArchived ? '📤' : '🗂'}
+          {isArchived ? <IconUnarchive size={18} /> : <IconArchive size={18} />}
         </button>
       </div>
     </div>

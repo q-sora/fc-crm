@@ -46,6 +46,7 @@ class ExternalMessageResponse(BaseModel):
     file: FileShort | None
     wa_message_id: str | None
     tg_message_id: int | None
+    is_forwarded: bool = False
     sent_at: datetime
     model_config = {"from_attributes": True}
 
@@ -64,3 +65,10 @@ class ExternalChatResponse(BaseModel):
 class SendMessageRequest(BaseModel):
     content: str | None = None
     file_id: int | None = None
+    is_forwarded: bool = False
+
+
+class UpdateClientProfileRequest(BaseModel):
+    full_name: str | None = None
+    iin: str | None = None
+    organization_id: int | None = None

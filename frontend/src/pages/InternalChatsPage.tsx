@@ -1,10 +1,20 @@
-import { useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { getInternalChats, getInternalMessages, sendInternalMessage } from '@/api/internalChats'
+import { Fragment, useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getInternalChats, getInternalMessages, sendInternalMessage, createInternalChat } from '@/api/internalChats'
+import { getUsers } from '@/api/users'
 import { useChatStore } from '@/store/chatStore'
 import { useAuthStore } from '@/store/authStore'
-import { subscribeWs } from '@/socket/socket'
 import MessageInput from '@/components/MessageInput/MessageInput'
+import NewChatModal from '@/components/NewChatModal/NewChatModal'
+import ForwardModal from '@/components/ForwardModal/ForwardModal'
+import IconPlus from '@/components/icons/IconPlus'
+import IconUser from '@/components/icons/IconUser'
+import IconGroup from '@/components/icons/IconGroup'
+import IconAttach from '@/components/icons/IconAttach'
+import IconFile from '@/components/icons/IconFile'
+import IconForward from '@/components/icons/IconForward'
+import IconChevronDown from '@/components/icons/IconChevronDown'
+import ImageLightbox from '@/components/ImageLightbox/ImageLightbox'
 import styles from './InternalChatsPage.module.css'
 
 function formatTime(iso: string) {
@@ -14,76 +24,194 @@ function formatTime(iso: string) {
 export default function InternalChatsPage() {
   const currentUser = useAuthStore((s) => s.user)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<HTMLDivElement>(null)
+  const separatorRef = useRef<HTMLDivElement>(null)
+  const qc = useQueryClient()
+  const setActiveNavPage = useChatStore((s) => s.setActiveNavPage)
+  useEffect(() => { setActiveNavPage('internal'); return () => setActiveNavPage(null) }, [setActiveNavPage])
+  const [showNewChat, setShowNewChat] = useState(false)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const closeLightbox = useCallback(() => setLightboxSrc(null), [])
+  const [forwardTarget, setForwardTarget] = useState<{ content: string | null; fileId: number | null } | null>(null)
+  const unreadAtOpenRef = useRef(0)
+  const [separatorIdx, setSeparatorIdx] = useState<number | null>(null)
 
   const activeId = useChatStore((s) => s.activeInternalChatId)
   const setActive = useChatStore((s) => s.setActiveInternalChat)
   const allChats = useChatStore((s) => s.internalChats)
+  const unreadInternal = useChatStore((s) => s.unreadInternal)
   const setChats = useChatStore((s) => s.setInternalChats)
   const messages = useChatStore((s) => s.internalMessages)
   const setMessages = useChatStore((s) => s.setInternalMessages)
   const appendMsg = useChatStore((s) => s.appendInternalMessage)
+  const touchInternalChat = useChatStore((s) => s.touchInternalChat)
 
-  const { data: chats = [] } = useQuery({
+  const { data: fetchedChats } = useQuery({
     queryKey: ['internal-chats'],
     queryFn: getInternalChats,
   })
 
-  useEffect(() => { setChats(chats) }, [chats, setChats])
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: getUsers,
+  })
 
   useEffect(() => {
-    if (!activeId || messages[activeId]) return
-    getInternalMessages(activeId).then((msgs) => setMessages(activeId, msgs))
-  }, [activeId, messages, setMessages])
+    if (fetchedChats) setChats(fetchedChats)
+  }, [fetchedChats, setChats])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages[activeId ?? 0]?.length])
+  const loadedChatsRef = useRef<Set<number>>(new Set())
 
+  // Reset separator on chat change
   useEffect(() => {
-    return subscribeWs((event) => {
-      if (event.type === 'internal:message:new') {
-        appendMsg(event.chatId, event.message)
+    setSeparatorIdx(null)
+  }, [activeId])
+
+  // Load history or use cached, then trigger initial scroll
+  useEffect(() => {
+    if (!activeId) return
+    const capturedUnread = unreadAtOpenRef.current
+    const doScroll = (msgCount: number) => {
+      if (capturedUnread > 0 && msgCount >= capturedUnread) {
+        setSeparatorIdx(msgCount - capturedUnread)
+      } else {
+        requestAnimationFrame(() => {
+          const el = messagesRef.current
+          if (el) el.scrollTop = el.scrollHeight
+        })
       }
+    }
+    if (loadedChatsRef.current.has(activeId)) {
+      const cached = useChatStore.getState().internalMessages[activeId] ?? []
+      doScroll(cached.length)
+      return
+    }
+    loadedChatsRef.current.add(activeId)
+    getInternalMessages(activeId).then((msgs) => {
+      setMessages(activeId, msgs)
+      doScroll(msgs.length)
     })
-  }, [appendMsg])
+  }, [activeId, setMessages])
 
-  const activeChat = allChats.find((c) => c.id === activeId) ?? null
   const activeMsgs = activeId ? (messages[activeId] ?? []) : []
 
-  function getChatLabel(chat: typeof chats[0]) {
+  // Scroll to separator after it renders
+  useEffect(() => {
+    if (separatorIdx === null) return
+    requestAnimationFrame(() => {
+      separatorRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' })
+    })
+  }, [separatorIdx])
+
+  // Smooth scroll on new messages if near bottom
+  useEffect(() => {
+    if (!activeMsgs.length) return
+    const el = messagesRef.current
+    if (!el) return
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    if (isNearBottom) el.scrollTop = el.scrollHeight
+  }, [activeMsgs.length])
+
+  // IntersectionObserver for scroll button
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowScrollBtn(!entry.isIntersecting),
+      { root: messagesRef.current, threshold: 0.1 }
+    )
+    if (bottomRef.current) observer.observe(bottomRef.current)
+    return () => observer.disconnect()
+  }, [activeId])
+
+  const activeChat = allChats.find((c) => c.id === activeId) ?? null
+
+  function getChatLabel(chat: typeof allChats[0]) {
     if (chat.type === 'group') return chat.name ?? 'Группа'
     const other = chat.members.find((m) => m.id !== currentUser?.id)
     return other?.name ?? 'Чат'
+  }
+
+  function handleSelectChat(chatId: number) {
+    unreadAtOpenRef.current = useChatStore.getState().unreadInternal[chatId] ?? 0
+    setActive(chatId)
   }
 
   async function handleSend(content: string, fileId?: number) {
     if (!activeId) return
     const msg = await sendInternalMessage(activeId, { content, fileId })
     appendMsg(activeId, msg)
+    touchInternalChat(activeId)
   }
+
+  async function handleCreateChat(type: 'direct' | 'group', memberIds: number[], name?: string) {
+    const chat = await createInternalChat({ type, memberIds, name })
+    await qc.invalidateQueries({ queryKey: ['internal-chats'] })
+    setActive(chat.id)
+    setShowNewChat(false)
+  }
+
+  const headerInfo = useMemo(() => {
+    if (!activeChat) return null
+    if (activeChat.type === 'group') {
+      return {
+        initials: null as string | null,
+        name: activeChat.name ?? 'Группа',
+        sub: `${activeChat.members.length} участников`,
+        isGroup: true,
+      }
+    }
+    const other = activeChat.members.find((m) => m.id !== currentUser?.id)
+    const otherUser = users.find((u) => u.id === other?.id)
+    const roleLabel = otherUser?.role === 'admin' ? 'Администратор' : 'Сотрудник'
+    const initials = other
+      ? other.name.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
+      : '?'
+    return {
+      initials,
+      name: other?.name ?? 'Чат',
+      sub: roleLabel,
+      isGroup: false,
+    }
+  }, [activeChat, currentUser, users])
 
   return (
     <div className={styles.page}>
-      {/* Chat list */}
       <div className={styles.chatListPanel}>
         <div className={styles.listHeader}>
           <span className={styles.listTitle}>Команда</span>
+          <button className={styles.newChatBtn} onClick={() => setShowNewChat(true)} title="Новый чат">
+            <IconPlus size={16} />
+          </button>
         </div>
         <div className={styles.chatItems}>
-          {chats.length === 0 && (
+          {allChats.length === 0 && (
             <div className={styles.empty}>Нет чатов</div>
           )}
-          {chats.map((chat) => (
+          {allChats.map((chat) => (
             <button
               key={chat.id}
               className={`${styles.chatItem} ${chat.id === activeId ? styles.active : ''}`}
-              onClick={() => setActive(chat.id)}
+              onClick={() => handleSelectChat(chat.id)}
             >
-              <div className={styles.chatAvatar}>
-                {chat.type === 'group' ? '👥' : '👤'}
+              <div className={`${styles.chatAvatar} ${chat.type === 'direct' ? styles.chatAvatarInitials : ''}`}>
+                {chat.type === 'group'
+                  ? <IconGroup size={18} />
+                  : (() => {
+                      const other = chat.members.find((m) => m.id !== currentUser?.id)
+                      return other
+                        ? other.name.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
+                        : <IconUser size={18} />
+                    })()}
               </div>
               <div className={styles.chatInfo}>
-                <div className={styles.chatName}>{getChatLabel(chat)}</div>
+                <div className={styles.chatNameRow}>
+                  <div className={styles.chatName}>{getChatLabel(chat)}</div>
+                  {(unreadInternal[chat.id] ?? 0) > 0 && (
+                    <span className={styles.unreadBadge}>
+                      {unreadInternal[chat.id] > 99 ? '99+' : unreadInternal[chat.id]}
+                    </span>
+                  )}
+                </div>
                 <div className={styles.chatMembers}>
                   {chat.members.map((m) => m.name).join(', ')}
                 </div>
@@ -93,44 +221,139 @@ export default function InternalChatsPage() {
         </div>
       </div>
 
-      {/* Chat window */}
       <div className={styles.window}>
         {!activeChat ? (
           <div className={styles.placeholder}>
-            <span className={styles.placeholderIcon}>👥</span>
+            <IconGroup size={40} />
             Выберите чат
           </div>
         ) : (
           <>
             <div className={styles.windowHeader}>
-              <span className={styles.windowTitle}>{getChatLabel(activeChat)}</span>
+              <div className={styles.headerAvatar}>
+                {headerInfo?.isGroup
+                  ? <IconGroup size={20} />
+                  : (headerInfo?.initials ?? <IconUser size={20} />)
+                }
+              </div>
+              <div className={styles.headerInfo}>
+                <span className={styles.headerName}>{headerInfo?.name}</span>
+                <span className={styles.headerSub}>{headerInfo?.sub}</span>
+              </div>
             </div>
 
-            <div className={styles.windowMessages}>
-              {activeMsgs.map((msg) => {
+            <div className={styles.windowMessages} ref={messagesRef}>
+              {activeMsgs.map((msg, idx) => {
                 const isMine = msg.senderId === currentUser?.id
+                const initials = msg.senderName.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
+                const prevMsg = activeMsgs[idx - 1]
+                const nextMsg = activeMsgs[idx + 1]
+                const isFirstInGroup = !prevMsg || prevMsg.senderId !== msg.senderId
+                const isLastInGroup = !nextMsg || nextMsg.senderId !== msg.senderId
                 return (
-                  <div
-                    key={msg.id}
-                    className={`${styles.internalBubbleWrapper} ${isMine ? styles.mine : styles.theirs}`}
-                  >
-                    {!isMine && (
-                      <span className={styles.senderName}>{msg.senderName}</span>
+                  <Fragment key={msg.id}>
+                    {separatorIdx !== null && idx === separatorIdx && (
+                      <div ref={separatorRef} className={styles.unreadSeparator}>
+                        <div className={styles.unreadSeparatorLine} />
+                        <span className={styles.unreadSeparatorLabel}>Непрочитанные</span>
+                        <div className={styles.unreadSeparatorLine} />
+                      </div>
                     )}
-                    <div className={`${styles.internalBubble} ${isMine ? styles.mine : styles.theirs}`}>
-                      {msg.content}
-                      <div className={styles.bubbleTime}>{formatTime(msg.sentAt)}</div>
+                    <div
+                      className={`${styles.internalBubbleWrapper} ${isMine ? styles.mine : styles.theirs} ${!isLastInGroup ? styles.grouped : ''}`}
+                    >
+                      {!isMine && (
+                        isLastInGroup
+                          ? <div className={styles.msgAvatar} title={msg.senderName}>{initials}</div>
+                          : <div className={styles.msgAvatarSpacer} />
+                      )}
+                      <div className={styles.msgBody}>
+                      <div className={styles.msgBubbleRow}>
+                      {isMine && (
+                        <button
+                          className={`${styles.forwardBtn} ${styles.forwardBtnMine}`}
+                          title="Переслать"
+                          onClick={() => setForwardTarget({ content: msg.content, fileId: msg.file?.id ?? null })}
+                        ><IconForward size={14} /></button>
+                      )}
+                      <div className={`${styles.internalBubble} ${isMine ? styles.mine : styles.theirs} ${msg.file && (msg.file.mimeType.startsWith('image/') || msg.file.mimeType.startsWith('video/')) ? styles.mediaBubble : ''}`}>
+                        {!isMine && isFirstInGroup && (
+                          <div className={styles.senderName}>{msg.senderName}</div>
+                        )}
+                        {msg.isForwarded && <div className={styles.forwardedLabel}>Переслано</div>}
+                        {msg.file && msg.file.mimeType.startsWith('image/') && (
+                          <>
+                            <img
+                              className={styles.fileImg}
+                              src={msg.file.url}
+                              alt={msg.file.originalName}
+                              onClick={() => setLightboxSrc(msg.file!.url)}
+                            />
+                            <a className={styles.fileDownload} href={msg.file.url} download={msg.file.originalName}>
+                              <IconAttach size={12} />{msg.file.originalName}
+                            </a>
+                          </>
+                        )}
+                        {msg.file && msg.file.mimeType.startsWith('video/') && (
+                          <>
+                            <video className={styles.fileVideo} src={msg.file.url} controls />
+                            <a className={styles.fileDownload} href={msg.file.url} download={msg.file.originalName}>
+                              <IconAttach size={12} />{msg.file.originalName}
+                            </a>
+                          </>
+                        )}
+                        {msg.file && !msg.file.mimeType.startsWith('image/') && !msg.file.mimeType.startsWith('video/') && (
+                          <a className={styles.fileAttachment} href={msg.file.url} download={msg.file.originalName}>
+                            <div className={styles.fileIconCircle}><IconFile size={28} /></div>
+                            <div className={styles.fileInfo}>
+                              <span className={styles.fileName}>{msg.file.originalName}</span>
+                              <span className={styles.fileDownloadHint}>Скачать</span>
+                            </div>
+                          </a>
+                        )}
+                        {msg.content && <span>{msg.content}</span>}
+                        <div className={styles.bubbleTime}>{formatTime(msg.sentAt)}</div>
+                      </div>
+                      {!isMine && (
+                        <button
+                          className={`${styles.forwardBtn} ${styles.forwardBtnTheirs}`}
+                          title="Переслать"
+                          onClick={() => setForwardTarget({ content: msg.content, fileId: msg.file?.id ?? null })}
+                        ><IconForward size={14} /></button>
+                      )}
+                      </div>
+                      </div>
                     </div>
-                  </div>
+                  </Fragment>
                 )
               })}
               <div ref={bottomRef} />
             </div>
 
+            {showScrollBtn && (
+              <button className={styles.scrollDownBtn} onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })} title="Вниз">
+                <IconChevronDown size={20} />
+              </button>
+            )}
             <MessageInput chatId={activeChat.id} onSend={handleSend} />
           </>
         )}
       </div>
+
+      {showNewChat && (
+        <NewChatModal
+          currentUserId={currentUser?.id ?? 0}
+          users={users}
+          onClose={() => setShowNewChat(false)}
+          onCreate={handleCreateChat}
+        />
+      )}
+
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={closeLightbox} />}
+
+      {forwardTarget && (
+        <ForwardModal target={forwardTarget} onClose={() => setForwardTarget(null)} />
+      )}
     </div>
   )
 }

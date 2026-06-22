@@ -4,6 +4,7 @@ import styles from './ChatListItem.module.css'
 interface Props {
   chat: ExternalChat
   isActive: boolean
+  unreadCount?: number
   onClick: () => void
 }
 
@@ -27,7 +28,7 @@ function getInitials(name: string | null): string {
     .toUpperCase()
 }
 
-export default function ChatListItem({ chat, isActive, onClick }: Props) {
+export default function ChatListItem({ chat, isActive, unreadCount = 0, onClick }: Props) {
   const { client, channel, lastMessageAt } = chat
   const displayName = client.fullName ?? client.whatsappPhone ?? `TG ${client.telegramUserId}`
 
@@ -46,7 +47,12 @@ export default function ChatListItem({ chat, isActive, onClick }: Props) {
       <div className={styles.body}>
         <div className={styles.row}>
           <span className={styles.name}>{displayName}</span>
-          <span className={styles.time}>{formatTime(lastMessageAt)}</span>
+          <div className={styles.rowRight}>
+            <span className={styles.time}>{formatTime(lastMessageAt)}</span>
+            {unreadCount > 0 && (
+              <span className={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+            )}
+          </div>
         </div>
         <div className={styles.preview}>
           {client.organization?.name ?? 'Организация не указана'}

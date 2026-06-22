@@ -4,6 +4,7 @@
   flex: 1;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .messages {
@@ -28,8 +29,8 @@
 }
 
 .emptyIcon {
-  font-size: 48px;
   opacity: 0.4;
+  display: flex;
 }
 
 .placeholder {
@@ -45,6 +46,52 @@
 }
 
 .placeholderIcon {
-  font-size: 56px;
   opacity: 0.3;
+  display: flex;
+}
+
+.scrollDownBtn {
+  position: absolute;
+  bottom: 80px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  z-index: 10;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.scrollDownBtn:hover {
+  background: #f8fafc;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.2);
+}
+
+.unreadSeparator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.unreadSeparatorLine {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.unreadSeparatorLabel {
+  white-space: nowrap;
+  flex-shrink: 0;
 }

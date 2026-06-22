@@ -26,11 +26,19 @@ async def create_organization(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    existing = await db.scalar(select(Organization).where(Organization.name == body.name))
+    # Split by | to support aliases: "Школа №2 | sch2 | Второй лицей"
+    parts = [p.strip() for p in body.name.split("|") if p.strip()]
+    if not parts:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name is required")
+
+    primary_name = parts[0]
+    aliases = parts[1:]
+
+    existing = await db.scalar(select(Organization).where(Organization.name == primary_name))
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Organization already exists")
 
-    org = Organization(name=body.name)
+    org = Organization(name=primary_name, aliases=aliases)
     db.add(org)
     await db.commit()
     await db.refresh(org)

@@ -32,6 +32,7 @@ class InternalMessageResponse(BaseModel):
     content: str | None
     message_type: InternalMessageType
     file: FileShort | None
+    is_forwarded: bool = False
     sent_at: datetime
     model_config = {"from_attributes": True}
 
@@ -48,3 +49,4 @@ class InternalChatResponse(BaseModel):
 class SendInternalMessageRequest(BaseModel):
     content: str | None = None
     file_id: int | None = None
+    is_forwarded: bool = False

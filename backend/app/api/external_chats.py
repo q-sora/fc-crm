@@ -3,14 +3,14 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from app.database import get_db
 from app.models.client_profile import Channel, ClientProfile
 from app.models.external_chat import ExternalChat, ChatStatus
 from app.models.external_message import ExternalMessage, MessageDirection, MessageType
 from app.models.file import File
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.external import ExternalChatResponse, ExternalMessageResponse, SendMessageRequest, FileShort
 from app.api.deps import get_current_user
 from app.services.whatsapp import send_wa_text, send_wa_file
@@ -18,6 +18,30 @@ from app.services.telegram_out import send_tg_text, send_tg_file
 from app.websocket.manager import manager
 
 router = APIRouter()
+
+
+def _user_chat_filter(q, user: User):
+    """Restrict query to chats the user has access to."""
+    user_org_ids = [org.id for org in user.organizations]
+    conditions = [
+        ExternalChat.assigned_employee_id == user.id,
+        ExternalChat.assigned_employee_id.is_(None),  # Unassigned — visible to everyone
+    ]
+    if user_org_ids:
+        conditions.append(
+            ExternalChat.client_profile.has(ClientProfile.organization_id.in_(user_org_ids))
+        )
+    return q.where(or_(*conditions))
+
+
+def _can_access_chat(chat: ExternalChat, user: User) -> bool:
+    if chat.assigned_employee_id is None:  # Unassigned — accessible to all
+        return True
+    if chat.assigned_employee_id == user.id:
+        return True
+    user_org_ids = {org.id for org in user.organizations}
+    org_id = chat.client_profile.organization_id if chat.client_profile else None
+    return org_id is not None and org_id in user_org_ids
 
 
 def _file_url(stored_name: str) -> str:
@@ -41,6 +65,7 @@ def _build_message_response(msg: ExternalMessage, file: File | None) -> External
         file=file_short,
         wa_message_id=msg.wa_message_id,
         tg_message_id=msg.tg_message_id,
+        is_forwarded=msg.is_forwarded,
         sent_at=msg.sent_at,
     )
 
@@ -50,7 +75,7 @@ async def list_chats(
     status: ChatStatus = Query(ChatStatus.active),
     channel: Channel | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     q = (
         select(ExternalChat)
@@ -63,6 +88,7 @@ async def list_chats(
     )
     if channel:
         q = q.where(ExternalChat.channel == channel)
+    q = _user_chat_filter(q, current_user)
 
     result = await db.scalars(q)
     chats = result.all()
@@ -88,11 +114,17 @@ async def get_messages(
     limit: int = Query(50, le=200),
     before_id: int | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    chat = await db.get(ExternalChat, chat_id)
+    chat = await db.scalar(
+        select(ExternalChat)
+        .options(selectinload(ExternalChat.client_profile))
+        .where(ExternalChat.id == chat_id)
+    )
     if not chat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    if not _can_access_chat(chat, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     q = (
         select(ExternalMessage)
@@ -128,6 +160,8 @@ async def send_message(
     )
     if not chat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    if not _can_access_chat(chat, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     if chat.status == ChatStatus.archived:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot send to archived chat")
 
@@ -155,6 +189,7 @@ async def send_message(
         message_type=msg_type,
         content=body.content,
         file_id=body.file_id,
+        is_forwarded=body.is_forwarded,
     )
     db.add(msg)
     chat.last_message_at = datetime.now(timezone.utc)
@@ -202,6 +237,7 @@ async def send_message(
                 "messageType": msg_type.value,
                 "content": body.content,
                 "fileId": body.file_id,
+                "isForwarded": body.is_forwarded,
                 "sentAt": msg.sent_at.isoformat(),
             },
         })
@@ -241,7 +277,7 @@ async def unarchive_chat(
 async def list_archive(
     channel: Channel | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Shortcut: GET /external/archive == GET /external/chats?status=archived"""
     q = (
@@ -255,6 +291,7 @@ async def list_archive(
     )
     if channel:
         q = q.where(ExternalChat.channel == channel)
+    q = _user_chat_filter(q, current_user)
 
     result = await db.scalars(q)
     chats = result.all()

@@ -26,11 +26,11 @@ export async function getChatMessages(
 
 export async function sendExternalMessage(
   chatId: number,
-  payload: { content?: string; fileId?: number }
+  payload: { content?: string; fileId?: number; isForwarded?: boolean }
 ): Promise<ExternalMessage> {
   const { data } = await client.post<ExternalMessage>(
     `/external/chats/${chatId}/send`,
-    { content: payload.content, file_id: payload.fileId }
+    { content: payload.content, file_id: payload.fileId, is_forwarded: payload.isForwarded ?? false }
   )
   return data
 }

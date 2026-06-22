@@ -1,11 +1,11 @@
-const { getSocket } = require('./whatsapp')
+const { getSocket } = require('./socket')
 const axios = require('axios')
 
 async function sendMessage({ phone, message, fileUrl, mimeType, fileName }) {
   const sock = getSocket()
   if (!sock) throw new Error('WhatsApp not connected')
 
-  const jid = `${phone}@s.whatsapp.net`
+  const jid = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
 
   if (fileUrl) {
     const response = await axios.get(fileUrl, { responseType: 'arraybuffer' })

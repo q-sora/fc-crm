@@ -11,31 +11,48 @@ export async function createUser(payload: {
   name: string
   password: string
   role: UserRole
-  organizationId?: number
+  organizationIds?: number[]
 }): Promise<User> {
   const { data } = await client.post<User>('/users', {
     email: payload.email,
     name: payload.name,
     password: payload.password,
     role: payload.role,
-    organization_id: payload.organizationId,
+    organization_ids: payload.organizationIds ?? [],
   })
   return data
 }
 
 export async function updateUser(
   id: number,
-  payload: { name?: string; role?: UserRole; organizationId?: number; isActive?: boolean }
+  payload: {
+    name?: string
+    email?: string
+    password?: string
+    role?: UserRole
+    isActive?: boolean
+    organizationIds?: number[]
+  }
 ): Promise<User> {
   const { data } = await client.patch<User>(`/users/${id}`, {
     name: payload.name,
+    email: payload.email,
+    password: payload.password,
     role: payload.role,
-    organization_id: payload.organizationId,
     is_active: payload.isActive,
+    organization_ids: payload.organizationIds,
   })
   return data
 }
 
-export async function deactivateUser(id: number): Promise<void> {
+export async function deactivateUser(id: number): Promise<User> {
+  return updateUser(id, { isActive: false })
+}
+
+export async function activateUser(id: number): Promise<User> {
+  return updateUser(id, { isActive: true })
+}
+
+export async function deleteUser(id: number): Promise<void> {
   await client.delete(`/users/${id}`)
 }

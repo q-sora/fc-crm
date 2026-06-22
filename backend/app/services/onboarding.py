@@ -9,6 +9,7 @@ After 'done':
   - Frontend is notified via WebSocket
 """
 import re
+import difflib
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,8 +20,9 @@ from app.models.external_chat import ExternalChat, ChatStatus
 from app.models.external_message import ExternalMessage, MessageDirection, MessageType
 from app.models.onboarding_session import OnboardingSession
 from app.models.organization import Organization
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, user_organizations
 from app.websocket.manager import manager
+from sqlalchemy.orm import selectinload
 
 IIN_RE = re.compile(r"^\d{12}$")
 
@@ -32,8 +34,9 @@ GREET = (
 )
 ASK_IIN = "Введите ваш ИИН (12 цифр)."
 BAD_IIN = "ИИН должен содержать ровно 12 цифр. Попробуйте ещё раз."
-ASK_ORG_TPL = "Укажите ваше учебное заведение / организацию.\n\nДоступные варианты:\n{orgs}"
-BAD_ORG_TPL = "Организация не найдена. Выберите из списка:\n{orgs}"
+ASK_ORG = "Укажите вашу организацию / учебное заведение."
+BAD_ORG_RETRY = "Организация не найдена. Попробуйте ещё раз."
+BAD_ORG_FINAL = "Не удалось определить организацию. Ваш вопрос передан специалистам — они свяжутся с вами в ближайшее время."
 DONE_MSG = "Спасибо! Ваш вопрос передан специалисту. Ожидайте ответа."
 NO_TEXT = "Пожалуйста, ответьте текстом."
 
@@ -71,7 +74,10 @@ async def handle_incoming(
         return None  # employee replies manually via UI
 
     # ── Onboarding in progress ─────────────────────────────────────────────────
-    session = await _get_or_create_session(channel, external_id, db)
+    session, is_new = await _get_or_create_session(channel, external_id, db)
+
+    if is_new:
+        return GREET
 
     if session.step == OnboardingStep.ask_name:
         if not text:
@@ -82,31 +88,51 @@ async def handle_incoming(
         return ASK_IIN
 
     if session.step == OnboardingStep.ask_iin:
-        if not text or not IIN_RE.match(text.strip()):
+        clean_iin = re.sub(r"[\s\-]", "", text or "")
+        if not IIN_RE.match(clean_iin):
             return BAD_IIN
-        session.collected_data = {**session.collected_data, "iin": text.strip()}
+        session.collected_data = {**session.collected_data, "iin": clean_iin}
         session.step = OnboardingStep.ask_org
         await db.commit()
-        orgs = await _org_list(db)
-        return ASK_ORG_TPL.format(orgs=orgs)
+        return ASK_ORG
 
     if session.step == OnboardingStep.ask_org:
         if not text:
             return NO_TEXT
-        org = await _find_org(text.strip(), db)
-        if not org:
-            orgs = await _org_list(db)
-            return BAD_ORG_TPL.format(orgs=orgs)
 
-        await _complete_onboarding(
-            session=session,
-            org=org,
-            channel=channel,
-            external_id=external_id,
-            tg_username=tg_username,
-            db=db,
-        )
-        return DONE_MSG
+        org = await _find_org(text.strip(), db)
+        if org:
+            await _complete_onboarding(
+                session=session,
+                org=org,
+                channel=channel,
+                external_id=external_id,
+                tg_username=tg_username,
+                db=db,
+            )
+            return DONE_MSG
+
+        # Not found — track attempts
+        attempts = session.collected_data.get("org_attempts", 0) + 1
+        session.collected_data = {
+            **session.collected_data,
+            "org_attempts": attempts,
+            "org_text": text.strip(),
+        }
+        await db.commit()
+
+        if attempts >= 2:
+            # 2nd failure — create chat visible to all workers
+            await _complete_onboarding_no_org(
+                session=session,
+                channel=channel,
+                external_id=external_id,
+                tg_username=tg_username,
+                db=db,
+            )
+            return BAD_ORG_FINAL
+
+        return BAD_ORG_RETRY
 
     return None
 
@@ -123,7 +149,7 @@ async def _get_profile(channel: Channel, external_id: str, db: AsyncSession) -> 
     )
 
 
-async def _get_or_create_session(channel: Channel, external_id: str, db: AsyncSession) -> OnboardingSession:
+async def _get_or_create_session(channel: Channel, external_id: str, db: AsyncSession) -> tuple[OnboardingSession, bool]:
     session = await db.scalar(
         select(OnboardingSession).where(
             OnboardingSession.channel == channel,
@@ -135,25 +161,113 @@ async def _get_or_create_session(channel: Channel, external_id: str, db: AsyncSe
         db.add(session)
         await db.commit()
         await db.refresh(session)
-    return session
+        return session, True
+    return session, False
 
 
-async def _org_list(db: AsyncSession) -> str:
-    orgs = await db.scalars(select(Organization).order_by(Organization.name))
-    return "\n".join(f"• {o.name}" for o in orgs.all()) or "(список пуст — обратитесь к администратору)"
+def _similarity(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
 async def _find_org(text: str, db: AsyncSession) -> Organization | None:
-    # exact match first
-    org = await db.scalar(
-        select(Organization).where(func.lower(Organization.name) == text.lower())
+    orgs = (await db.scalars(select(Organization))).all()
+    text_lower = text.lower()
+
+    # Exact match (name or aliases)
+    for org in orgs:
+        if org.name.lower() == text_lower:
+            return org
+        if any(a.lower() == text_lower for a in (org.aliases or [])):
+            return org
+
+    # Substring match
+    for org in orgs:
+        all_names = [org.name] + (org.aliases or [])
+        if any(text_lower in n.lower() or n.lower() in text_lower for n in all_names):
+            return org
+
+    # Fuzzy match — best ratio above threshold
+    best_ratio = 0.0
+    best_org: Organization | None = None
+    for org in orgs:
+        all_names = [org.name] + (org.aliases or [])
+        for name in all_names:
+            ratio = _similarity(text, name)
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_org = org
+
+    return best_org if best_ratio >= 0.55 else None
+
+
+async def _complete_onboarding_no_org(
+    *,
+    session: OnboardingSession,
+    channel: Channel,
+    external_id: str,
+    tg_username: str | None,
+    db: AsyncSession,
+) -> None:
+    """Complete onboarding when org couldn't be identified — assign chat to all active workers."""
+    data = session.collected_data
+    org_text = data.get("org_text", "")
+
+    profile = ClientProfile(
+        full_name=data.get("name"),
+        iin=data.get("iin"),
+        organization_id=None,
+        channel=channel,
+        onboarding_step=OnboardingStep.done,
+        onboarding_data={},
+        assigned_employee_id=None,
     )
-    if org:
-        return org
-    # partial match
-    return await db.scalar(
-        select(Organization).where(Organization.name.ilike(f"%{text}%"))
+    if channel == Channel.whatsapp:
+        profile.whatsapp_phone = external_id
+    else:
+        profile.telegram_user_id = int(external_id)
+        profile.telegram_username = tg_username
+
+    db.add(profile)
+    await db.flush()
+
+    chat = ExternalChat(
+        client_profile_id=profile.id,
+        assigned_employee_id=None,
+        channel=channel,
+        status=ChatStatus.active,
+        last_message_at=datetime.now(timezone.utc),
     )
+    db.add(chat)
+    await db.flush()
+
+    # Save last typed org text as first message so workers can see what was entered
+    if org_text:
+        first_msg = ExternalMessage(
+            chat_id=chat.id,
+            direction=MessageDirection.incoming,
+            message_type=MessageType.text,
+            content=org_text,
+        )
+        db.add(first_msg)
+
+    await db.delete(session)
+    await db.commit()
+    await db.refresh(chat)
+
+    # Notify ALL active employees and admins
+    all_users = (await db.scalars(
+        select(User).where(User.is_active == True)  # noqa: E712
+    )).all()
+
+    ws_payload = {
+        "type": "client:onboarding:done",
+        "chatId": chat.id,
+        "clientId": profile.id,
+        "clientName": profile.full_name,
+        "channel": channel.value,
+    }
+    for user in all_users:
+        await manager.send_to_user(user.id, ws_payload)
 
 
 async def _complete_onboarding(
@@ -214,10 +328,12 @@ async def _complete_onboarding(
 async def _assign_employee(org_id: int, db: AsyncSession) -> User | None:
     """Pick the active employee for this org with the fewest open chats."""
     employees = (await db.scalars(
-        select(User).where(
+        select(User)
+        .join(user_organizations, user_organizations.c.user_id == User.id)
+        .where(
             User.role == UserRole.employee,
             User.is_active == True,  # noqa: E712
-            User.organization_id == org_id,
+            user_organizations.c.organization_id == org_id,
         )
     )).all()
 
@@ -277,17 +393,48 @@ async def _save_incoming_message(
     await db.commit()
     await db.refresh(msg)
 
+    file_payload = None
+    if file_id:
+        from app.models.file import File as FileModel
+        f = await db.get(FileModel, file_id)
+        if f:
+            file_payload = {
+                "id": f.id,
+                "originalName": f.original_name,
+                "mimeType": f.mime_type,
+                "url": f"/uploads/{f.stored_path}",
+            }
+
+    ws_payload = {
+        "type": "external:message:new",
+        "chatId": chat.id,
+        "message": {
+            "id": msg.id,
+            "direction": "in",
+            "messageType": message_type.value,
+            "content": text,
+            "file": file_payload,
+            "sentAt": msg.sent_at.isoformat(),
+        },
+    }
+
     # Notify assigned employee
+    notified: set[int] = set()
     if chat.assigned_employee_id:
-        await manager.send_to_user(chat.assigned_employee_id, {
-            "type": "external:message:new",
-            "chatId": chat.id,
-            "message": {
-                "id": msg.id,
-                "direction": "in",
-                "messageType": message_type.value,
-                "content": text,
-                "fileId": file_id,
-                "sentAt": msg.sent_at.isoformat(),
-            },
-        })
+        await manager.send_to_user(chat.assigned_employee_id, ws_payload)
+        notified.add(chat.assigned_employee_id)
+
+    # Also notify employees who belong to the client's organization
+    if profile.organization_id:
+        org_employees = (await db.scalars(
+            select(User)
+            .join(user_organizations, user_organizations.c.user_id == User.id)
+            .where(
+                user_organizations.c.organization_id == profile.organization_id,
+                User.is_active == True,  # noqa: E712
+            )
+        )).all()
+        for emp in org_employees:
+            if emp.id not in notified:
+                await manager.send_to_user(emp.id, ws_payload)
+                notified.add(emp.id)

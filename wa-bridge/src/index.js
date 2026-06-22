@@ -6,7 +6,7 @@ app.use(express.json())
 
 // Command endpoint: FastAPI → wa-bridge → WhatsApp
 app.post('/send', async (req, res) => {
-  const { authToken } = req.headers
+  const authToken = req.headers['authtoken']  // Express lowercases all header names
   if (authToken !== process.env.FASTAPI_WEBHOOK_TOKEN) {
     return res.status(401).json({ error: 'unauthorized' })
   }

@@ -120,3 +120,72 @@
   background: var(--border);
   margin: 0 16px;
 }
+
+.fieldLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editOrgBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.editOrgBtn:hover {
+  opacity: 0.75;
+}
+
+.orgEditRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.orgSelect {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: #ffffff;
+  outline: none;
+}
+
+.orgSelect:focus {
+  border-color: var(--primary);
+}
+
+.orgSaveBtn {
+  padding: 5px 12px;
+  background: var(--primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.orgSaveBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.orgCancelBtn {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+}

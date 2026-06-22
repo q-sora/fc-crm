@@ -12,13 +12,14 @@ export interface User {
   name: string
   role: UserRole
   isActive: boolean
-  organizationId: number | null
+  organizations: Organization[]
   createdAt: string
 }
 
 export interface Organization {
   id: number
   name: string
+  aliases: string[]
   createdAt: string
 }
 
@@ -56,6 +57,7 @@ export interface ExternalMessage {
   file: FileAttachment | null
   waMessageId: string | null
   tgMessageId: number | null
+  isForwarded: boolean
   sentAt: string
 }
 
@@ -82,6 +84,7 @@ export interface InternalMessage {
   content: string | null
   messageType: InternalMessageType
   file: FileAttachment | null
+  isForwarded: boolean
   sentAt: string
 }
 

@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Text, DateTime, ForeignKey, func
+from sqlalchemy import Boolean, Text, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Enum as SAEnum
 
@@ -24,6 +24,7 @@ class InternalMessage(Base):
         SAEnum(InternalMessageType), nullable=False, default=InternalMessageType.text
     )
     file_id: Mapped[int | None] = mapped_column(ForeignKey("files.id"), nullable=True)
+    is_forwarded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chat: Mapped["InternalChat"] = relationship(back_populates="messages")  # noqa: F821

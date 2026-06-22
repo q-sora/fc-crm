@@ -14,9 +14,13 @@ router = APIRouter()
 @router.get("", response_model=list[QuickPhraseResponse])
 async def list_phrases(
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    result = await db.scalars(select(QuickPhrase).order_by(QuickPhrase.title))
+    result = await db.scalars(
+        select(QuickPhrase)
+        .where(QuickPhrase.created_by == current_user.id)
+        .order_by(QuickPhrase.title)
+    )
     return result.all()
 
 

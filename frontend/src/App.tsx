@@ -5,6 +5,7 @@ import LoginPage from '@/pages/LoginPage'
 import ExternalChatsPage from '@/pages/ExternalChatsPage'
 import InternalChatsPage from '@/pages/InternalChatsPage'
 import ArchivePage from '@/pages/ArchivePage'
+import AdminPage from '@/pages/AdminPage'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="chats/external" element={<ExternalChatsPage />} />
         <Route path="chats/internal" element={<InternalChatsPage />} />
         <Route path="chats/archive" element={<ArchivePage />} />
+        <Route path="admin" element={<AdminPage />} />
         <Route index element={<Navigate to="chats/external" replace />} />
         <Route path="*" element={<Navigate to="chats/external" replace />} />
       </Route>

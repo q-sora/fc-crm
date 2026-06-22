@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     wa_bridge_token: str
     telegram_bot_token: str
     upload_dir: str = "/app/uploads"
-    max_file_size_mb: int = 20
+    max_file_size_mb: int = 5120
 
     class Config:
         env_file = ".env"

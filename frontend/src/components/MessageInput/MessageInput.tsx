@@ -1,6 +1,9 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { uploadFile } from '@/api/files'
 import QuickPhrasesList from '@/components/QuickPhrases/QuickPhrasesList'
+import IconAttach from '@/components/icons/IconAttach'
+import IconBolt from '@/components/icons/IconBolt'
+import IconSend from '@/components/icons/IconSend'
 import styles from './MessageInput.module.css'
 
 interface Props {
@@ -13,23 +16,33 @@ export default function MessageInput({ chatId, onSend }: Props) {
   const [fileId, setFileId] = useState<number | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [showPhrases, setShowPhrases] = useState(false)
+  const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const dragCounterRef = useRef(0)
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function uploadSingleFile(file: File) {
     setUploading(true)
+    setUploadError(null)
     try {
       const uploaded = await uploadFile(file)
       setFileId(uploaded.id)
       setFileName(file.name)
+    } catch {
+      setUploadError('Не удалось загрузить файл. Проверьте размер (макс. 100 МБ).')
     } finally {
       setUploading(false)
-      e.target.value = ''
     }
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await uploadSingleFile(file)
+    e.target.value = ''
   }
 
   async function handleSend() {
@@ -41,6 +54,7 @@ export default function MessageInput({ chatId, onSend }: Props) {
       setFileId(null)
       setFileName(null)
       setShowPhrases(false)
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
     } finally {
       setSending(false)
     }
@@ -53,10 +67,14 @@ export default function MessageInput({ chatId, onSend }: Props) {
     }
   }
 
-  function handlePhraseSelect(body: string) {
-    setText(body)
+  async function handlePhraseSelect(body: string) {
     setShowPhrases(false)
-    textareaRef.current?.focus()
+    setSending(true)
+    try {
+      await onSend(body, undefined)
+    } finally {
+      setSending(false)
+    }
   }
 
   function autoResize(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -65,13 +83,56 @@ export default function MessageInput({ chatId, onSend }: Props) {
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
   }
 
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault()
+    dragCounterRef.current++
+    if (dragCounterRef.current === 1) setIsDragOver(true)
+  }
+
+  function handleDragLeave() {
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) setIsDragOver(false)
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    dragCounterRef.current = 0
+    setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    await uploadSingleFile(file)
+  }
+
   const canSend = (text.trim().length > 0 || fileId !== null) && !sending && !uploading
 
   return (
-    <div className={styles.container}>
+    <div
+      className={styles.container}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {isDragOver && (
+        <div className={styles.dropOverlay}>
+          <div className={styles.dropOverlayInner}>
+            <IconAttach size={32} />
+            <span>Отпустите файл для загрузки</span>
+          </div>
+        </div>
+      )}
+
+      {uploadError && (
+        <div className={styles.uploadError}>{uploadError}</div>
+      )}
+
       {fileId && fileName && (
         <div className={styles.filePreview}>
-          <span>📎</span>
+          <IconAttach size={14} />
           <span className={styles.filePreviewName}>{fileName}</span>
           <button className={styles.removeFile} onClick={() => { setFileId(null); setFileName(null) }}>✕</button>
         </div>
@@ -90,7 +151,7 @@ export default function MessageInput({ chatId, onSend }: Props) {
           title="Прикрепить файл"
           disabled={uploading}
         >
-          {uploading ? '⏳' : '📎'}
+          <IconAttach size={20} />
         </button>
 
         <input
@@ -116,7 +177,7 @@ export default function MessageInput({ chatId, onSend }: Props) {
             title="Шаблонные фразы"
             type="button"
           >
-            ⚡
+            <IconBolt size={18} />
           </button>
         </div>
 
@@ -126,7 +187,7 @@ export default function MessageInput({ chatId, onSend }: Props) {
           disabled={!canSend}
           title="Отправить"
         >
-          ➤
+          <IconSend size={18} />
         </button>
       </div>
     </div>
