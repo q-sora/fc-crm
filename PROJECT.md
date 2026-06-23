@@ -10,8 +10,8 @@
 
 | Роль | Возможности |
 |------|-------------|
-| **Admin** | Регистрация сотрудников, назначение организаций, просмотр всех чатов, управление архивом |
-| **Employee** | Ведение чатов из WA/TG, просмотр профилей клиентов, внутренний чат с коллегами, шаблонные фразы |
+| **Admin** | Регистрация сотрудников, назначение организаций, просмотр всех чатов, управление архивом, управление организациями и клиентами |
+| **Employee** | Ведение чатов из WA/TG, просмотр и редактирование профилей клиентов (организация), внутренний чат с коллегами, шаблонные фразы |
 
 Регистрация новых пользователей — **только через аккаунт администратора**.
 
@@ -20,9 +20,11 @@
 ## Каналы коммуникации с клиентами
 
 ### WhatsApp Bot (Baileys — Node.js микросервис)
-- Приём текстовых сообщений и файлов (фото, документы, голосовые)
+- Приём текстовых сообщений и файлов (фото, видео, документы, аудио)
+- Файлы с подписью (`documentWithCaptionMessage`) — поддерживаются
 - При первом обращении запускает онбординг (см. ниже)
 - Передаёт все события в FastAPI backend через HTTP webhook
+- При `@lid` JID (новый формат WhatsApp) — пытается резолвить в реальный номер через `contacts.upsert`; если не удаётся — поле телефона не отображается
 
 ### Telegram Bot (aiogram 3 — Python, в составе backend)
 - Приём текстовых сообщений и файлов
@@ -32,52 +34,69 @@
 ### Онбординг нового клиента (единый для WA и TG)
 
 ```
-[Первое сообщение с нового номера/аккаунта]
+[Любое первое сообщение]
           │
           ▼
-   [ask_name]  → Бот: "Добро пожаловать в FC CRM! Введите ваше ФИО"
+   [приветствие] → Бот: "Добро пожаловать в FC CRM! Введите ваше ФИО."
           │
           ▼
-    [ask_iin]  → Бот: "Введите ваш ИИН (12 цифр)"
-          │           (валидация: ровно 12 цифр)
-          ▼
-    [ask_org]  → Бот: "Укажите ваше учебное заведение / организацию"
+   [ask_name]   → Принимает ФИО
           │
           ▼
-     [done]    → Создаётся client_profile (ФИО + ИИН + организация)
-                 → Чат привязывается к ответственному сотруднику
-                 → Сотруднику приходит уведомление в FC CRM
-                 → Бот: "Спасибо! Ваш вопрос передан специалисту."
+   [ask_iin]    → Бот: "Введите ваш ИИН (12 цифр)"
+          │         Игнорирует пробелы и тире при вводе
+          ▼
+   [ask_org]    → Бот: "Укажите вашу организацию / учебное заведение"
+          │         Нечёткое совпадение (difflib, порог 0.55)
+          │         Проверяет основное название + псевдонимы (aliases)
+          │         2 попытки — на 2-й неудаче: чат виден всем сотрудникам
+          ▼
+   [done]       → Создаётся client_profile (ФИО + ИИН + организация)
+                  → Чат привязывается к сотруднику с наименьшей нагрузкой
+                  → Сотруднику приходит уведомление (WS + звук)
+                  → Бот: "Спасибо! Ваш вопрос передан специалисту."
 ```
+
+**Особые случаи:**
+- Организация не найдена за 2 попытки → чат без организации, виден **всем** активным сотрудникам
+- Нераспознанная организация сохраняется первым сообщением чата
+- Сотрудник может вручную указать/изменить организацию в профиле клиента
 
 ---
 
 ## Веб-приложение FC CRM (React)
 
-### Раздел 1: Чаты с клиентами (`/chats/external`)
-- Список всех входящих чатов (WA + TG) с пометкой канала
-- Иконка канала рядом с именем (WhatsApp / Telegram)
-- **Клик по пользователю → боковая панель с профилем клиента:**
-  - ФИО
-  - ИИН
-  - Организация / учебное заведение
+### Раздел 1: Чаты с клиентами
+- Список всех входящих чатов (WA + TG) с иконкой канала
+- Непрочитанные сообщения: счётчик + прокрутка к первому непрочитанному при открытии
+- Звуковое уведомление при новом сообщении (`/sounds/notification.mp3`)
+- Нераспределённые чаты (без ответственного) видны всем сотрудникам
+- **Боковая панель профиля клиента:**
+  - ФИО, ИИН, организация (с возможностью изменить)
   - Канал (WhatsApp / Telegram)
-  - Телефон (для WA) / Telegram username
+  - Телефон (только для WA, если удалось получить реальный номер)
+  - Telegram username
   - Дата первого обращения
-- Окно переписки с историей сообщений
+- Окно переписки: текст + файлы (фото, видео, документы, аудио)
 - Отправка текста и файлов обратно в WA или TG
-- Библиотека шаблонных фраз (быстрые ответы)
+- **Drag & drop** файлов в поле ввода
+- Шаблонные фразы — **мгновенная отправка** по клику (без вставки в поле)
 - Кнопка «Архивировать чат»
 
-### Раздел 2: Внутренние чаты (`/chats/internal`)
+### Раздел 2: Внутренние чаты
 - Переписка между сотрудниками (личные + групповые чаты)
-- Отправка файлов
-- Поиск по сообщениям
+- Отправка файлов, drag & drop
+- Звуковое уведомление (всегда, т.к. WS не отправляет эхо отправителю)
 
-### Раздел 3: Архив (`/chats/archive`)
+### Раздел 3: Архив
 - Архивированные внешние чаты (только чтение)
-- Фильтрация: по дате, организации, каналу, сотруднику
-- Клик по пользователю — тот же профиль клиента
+- Разархивирование чата
+
+### Раздел 4: Админ-панель
+- Управление сотрудниками: создание, активация/деактивация, назначение организаций
+- Управление организациями: создание с псевдонимами через `|` (напр. `КазНУ|Казахский национальный`)
+- Управление клиентами: просмотр, **удаление** (каскадно удаляет чаты и файлы, кроме файлов пересланных в другие чаты)
+- Управление шаблонными фразами
 
 ---
 
@@ -86,42 +105,48 @@
 ### Backend — `Python + FastAPI`
 | Компонент | Технология |
 |-----------|-----------|
-| Веб-фреймворк | **FastAPI** (async, WebSockets, OpenAPI из коробки) |
-| ORM | **SQLAlchemy 2.0** (async) |
+| Веб-фреймворк | **FastAPI** (async, WebSockets) |
+| ORM | **SQLAlchemy 2.0** (async + asyncpg) |
 | Миграции БД | **Alembic** |
-| Telegram-бот | **aiogram 3** (запускается внутри FastAPI процесса) |
-| Real-time | **WebSockets** (FastAPI native) или **Socket.io** через `python-socketio` |
+| Telegram-бот | **aiogram 3** (запускается внутри FastAPI lifespan) |
+| Real-time | **WebSockets** (FastAPI native) |
 | Аутентификация | **JWT** (python-jose) + bcrypt |
 | Загрузка файлов | FastAPI `UploadFile` + `aiofiles` |
 | Валидация | **Pydantic v2** |
-| HTTP-клиент | **httpx** (для общения с WA-bridge) |
+| HTTP-клиент | **httpx** (общение с WA-bridge, с retry при ConnectError/ReadTimeout) |
+| Нечёткий поиск | **difflib.SequenceMatcher** (stdlib, без доп. зависимостей) |
 
 ### WhatsApp Bridge — `Node.js микросервис`
 | Компонент | Технология |
 |-----------|-----------|
-| WhatsApp API | **@whiskeysockets/baileys** |
-| HTTP-клиент | axios (отправляет события в FastAPI) |
-| Сервер | express (принимает команды от FastAPI — отправить сообщение) |
+| WhatsApp API | **@whiskeysockets/baileys 6.7.x** |
+| HTTP-клиент | **axios** (вебхуки в FastAPI + загрузка медиа) |
+| Сервер | **express** (принимает команды от FastAPI) |
+| Логгер | **pino** (уровень `warn` — подавляет verbose Baileys output) |
 
-> **Почему отдельный Node.js сервис для WA?**  
-> Baileys — единственная надёжная библиотека для WhatsApp Web API, она работает только на Node.js. FastAPI общается с ней через HTTP: WA-bridge шлёт вебхуки в Python, Python шлёт команды в WA-bridge.
+**Особенности wa-bridge:**
+- `defaultQueryTimeoutMs: undefined` — без таймаута на init queries
+- `connectTimeoutMs: 60_000`, `keepAliveIntervalMs: 15_000`
+- Медиафайлы: `downloadMediaMessage` → загрузка в `/internal/files/upload`
+- Поддержка `@lid` JID (новый формат WhatsApp): маппинг через `contacts.upsert`
+- Разделение модулей: `socket.js` (синглтон), `store.js` (LID→phone map), `webhook.js`, `sender.js`
 
 ### Frontend — `React + TypeScript`
 | Технология | Назначение |
 |------------|-----------|
 | React 18 + TypeScript | UI |
 | Vite | Сборщик |
-| React Query (TanStack) | Серверный стейт, кэш |
-| WebSocket / Socket.io client | Real-time обновления |
+| TanStack Query (React Query) | Серверный стейт, кэш |
+| Zustand | Глобальный стейт (чаты, непрочитанные, activeNavPage) |
 | React Router v6 | Навигация |
-| Zustand | Глобальный стейт |
-| Tailwind CSS | Стилизация |
+| CSS Modules | Стилизация |
+| SVG-компоненты | Иконки (без emoji, без иконочных шрифтов) |
 
 ### База данных — `PostgreSQL 16` (Docker)
 
 ### Хранилище файлов
 - Docker volume `uploads_data`, монтируется в `/app/uploads`
-- FastAPI отдаёт файлы как static или через endpoint `/files/:id`
+- Отдаётся как static через nginx `/uploads/...`
 
 ---
 
@@ -132,28 +157,32 @@
 │                         Docker Compose                           │
 │                                                                 │
 │  ┌─────────────┐    ┌─────────────────┐    ┌────────────────┐  │
-│  │  Frontend   │    │   Backend       │    │   PostgreSQL   │  │
-│  │ React/Nginx │◄──►│   FastAPI       │◄──►│   Port 5432    │  │
-│  │  Port 80    │    │   Port 8000     │    └────────────────┘  │
-│  └─────────────┘    │   + aiogram     │                        │
-│                      │   (Telegram)    │    ┌────────────────┐  │
-│                      └────────┬────────┘    │ uploads volume │  │
-│                               │             └────────────────┘  │
-│                      ┌────────▼────────┐                        │
-│                      │  WA Bridge      │                        │
-│                      │  Node.js        │◄──► WhatsApp Web       │
-│                      │  Port 3001      │                        │
-│                      └─────────────────┘                        │
+│  │  Frontend   │    │    Backend      │    │   PostgreSQL   │  │
+│  │ React/Nginx │◄──►│    FastAPI      │◄──►│   Port 5432    │  │
+│  │  Port 80    │    │    Port 8000    │    └────────────────┘  │
+│  └─────────────┘    │  + aiogram 3   │                        │
+│                      │  (Telegram)    │    ┌────────────────┐  │
+│                      └────────┬───────┘    │ uploads volume │  │
+│                               │            └────────────────┘  │
+│                      ┌────────▼───────┐                        │
+│                      │   WA Bridge    │                        │
+│                      │   Node.js      │◄──► WhatsApp Web       │
+│                      │   Port 3001    │                        │
+│                      └────────────────┘                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Взаимодействие backend ↔ WA-bridge
 ```
-Входящее WA сообщение:
-  WA-bridge  →  POST /internal/wa-webhook  →  FastAPI  →  WS клиентам
+Входящее WA сообщение + медиа:
+  WhatsApp → WA-bridge (Baileys)
+    → downloadMediaMessage → POST /internal/files/upload → file_id
+    → POST /internal/wa-webhook { event, data: { phone, file_id, ... } }
+    → FastAPI → onboarding FSM / сохранение сообщения → WS клиентам
 
 Исходящее WA сообщение:
-  FastAPI  →  POST http://wa-bridge:3001/send  →  WA-bridge  →  WhatsApp
+  FastAPI → POST http://wa-bridge:3001/send → WA-bridge → WhatsApp
+  (retry до 2 раз при ConnectError/ReadTimeout, пауза 3с)
 ```
 
 ---
@@ -164,21 +193,27 @@
 -- Сотрудники системы FC CRM
 users
   id, email, password_hash, name, role (admin|employee),
-  organization_id, is_active, created_at
+  is_active, created_at
+
+-- Связь сотрудник ↔ организации (many-to-many)
+user_organizations
+  user_id, organization_id
 
 -- Организации / учебные заведения
 organizations
-  id, name, created_at
+  id, name,
+  aliases (jsonb, default []),  -- альтернативные названия для поиска
+  created_at
 
 -- Профили клиентов (из WA и TG)
 client_profiles
   id, full_name, iin, organization_id,
-  whatsapp_phone,      -- NULL если клиент только из TG
-  telegram_user_id,    -- NULL если клиент только из WA
+  whatsapp_phone,       -- JID: может быть '79001234567@s.whatsapp.net' или '...@lid'
+  telegram_user_id,
   telegram_username,
   channel (whatsapp|telegram),
   onboarding_step (ask_name|ask_iin|ask_org|done),
-  onboarding_data (jsonb),   -- временное хранение во время онбординга
+  onboarding_data (jsonb),
   assigned_employee_id,
   created_at
 
@@ -194,8 +229,8 @@ external_messages
   id, chat_id, direction (in|out),
   message_type (text|image|document|audio|video),
   content, file_id,
-  wa_message_id,       -- id из WhatsApp (для дедупликации)
-  tg_message_id,       -- id из Telegram
+  wa_message_id, tg_message_id,
+  is_forwarded,
   sent_at
 
 -- Внутренние чаты (сотрудник ↔ сотрудник)
@@ -210,10 +245,11 @@ internal_messages
   message_type (text|image|document),
   file_id, sent_at
 
--- Файлы
+-- Файлы (загруженные сотрудниками + полученные от клиентов)
 files
   id, original_name, stored_path, mime_type, size,
-  uploaded_by, created_at
+  uploaded_by (nullable — NULL для файлов от WA-bridge),
+  created_at
 
 -- Шаблонные фразы
 quick_phrases
@@ -222,8 +258,10 @@ quick_phrases
 -- Временные сессии онбординга (до завершения)
 onboarding_sessions
   id, channel (whatsapp|telegram),
-  external_id,   -- phone (WA) или telegram_user_id
-  step, collected_data (jsonb), started_at
+  external_id,        -- JID (WA) или telegram_user_id (TG)
+  step (ask_name|ask_iin|ask_org),
+  collected_data (jsonb),  -- name, iin, org_attempts, org_text
+  started_at
 ```
 
 ---
@@ -231,54 +269,71 @@ onboarding_sessions
 ## Структура проекта
 
 ```
-fc-crm/
+whatsapp-crm/
 ├── docker-compose.yml
-├── .env.example
+├── .env
 ├── PROJECT.md
 │
-├── backend/                        # Python FastAPI
+├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   ├── alembic.ini
-│   ├── alembic/migrations/
+│   ├── alembic/versions/
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_user_organizations.py
+│   │   ├── 0003_...py
+│   │   └── 0004_org_aliases.py
 │   └── app/
-│       ├── main.py                 # FastAPI app, lifespan
-│       ├── config.py               # Settings (pydantic-settings)
-│       ├── database.py             # SQLAlchemy async engine
-│       ├── models/                 # SQLAlchemy модели
-│       ├── schemas/                # Pydantic схемы (request/response)
+│       ├── main.py
+│       ├── config.py
+│       ├── database.py
+│       ├── models/
+│       │   ├── user.py
+│       │   ├── organization.py        # aliases: JSONB
+│       │   ├── client_profile.py
+│       │   ├── external_chat.py
+│       │   ├── external_message.py
+│       │   ├── internal_chat.py
+│       │   ├── internal_message.py
+│       │   ├── file.py
+│       │   ├── quick_phrase.py
+│       │   └── onboarding_session.py
+│       ├── schemas/
 │       ├── api/
-│       │   ├── auth.py             # POST /auth/login, /logout
-│       │   ├── users.py            # CRUD сотрудников (admin only)
-│       │   ├── organizations.py
-│       │   ├── external_chats.py   # WA+TG чаты, архивирование
-│       │   ├── internal_chats.py   # Внутренний мессенджер
-│       │   ├── messages.py
+│       │   ├── auth.py
+│       │   ├── users.py
+│       │   ├── organizations.py       # парсинг | для псевдонимов
+│       │   ├── external_chats.py      # нераспределённые чаты видны всем
+│       │   ├── internal_chats.py
 │       │   ├── files.py
 │       │   ├── quick_phrases.py
-│       │   ├── client_profiles.py  # GET профиль клиента (ФИО, ИИН)
-│       │   └── wa_webhook.py       # Внутренний webhook от WA-bridge
+│       │   ├── client_profiles.py     # DELETE с каскадом и защитой файлов
+│       │   ├── deps.py
+│       │   └── wa_webhook.py          # POST /internal/wa-webhook
+│       │                              # POST /internal/files/upload (для WA-bridge)
 │       ├── services/
-│       │   ├── onboarding.py       # FSM онбординга (WA + TG)
-│       │   ├── whatsapp.py         # HTTP-клиент к WA-bridge
-│       │   ├── notifications.py    # WS уведомления сотрудникам
-│       │   └── files.py
+│       │   ├── onboarding.py          # FSM: приветствие → ФИО → ИИН → орг → done
+│       │   ├── whatsapp.py            # httpx с retry
+│       │   └── telegram_out.py
 │       ├── telegram/
-│       │   ├── bot.py              # aiogram Dispatcher
-│       │   └── handlers.py         # Обработчики TG сообщений
+│       │   ├── bot.py
+│       │   └── handlers.py
 │       └── websocket/
-│           └── gateway.py          # WS endpoint /ws
+│           ├── gateway.py
+│           └── manager.py
 │
-├── wa-bridge/                      # Node.js WhatsApp микросервис
+├── wa-bridge/
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/
-│       ├── index.js                # Express сервер
-│       ├── whatsapp.js             # Baileys подключение
-│       ├── webhook.js              # Отправка событий в FastAPI
-│       └── sender.js               # Приём команд от FastAPI, отправка в WA
+│       ├── index.js      # Express: POST /send, GET /health
+│       ├── whatsapp.js   # Baileys: подключение, contacts.upsert listener
+│       ├── socket.js     # Синглтон сокета (избегает circular deps)
+│       ├── store.js      # LID→phone маппинг через contacts.upsert
+│       ├── webhook.js    # Входящие: парсинг, скачивание медиа, отправка в FastAPI
+│       └── sender.js     # Исходящие: sendMessage (текст + файлы)
 │
-└── frontend/                       # React
+└── frontend/
     ├── Dockerfile
     ├── nginx.conf
     └── src/
@@ -286,22 +341,21 @@ fc-crm/
         ├── App.tsx
         ├── pages/
         │   ├── LoginPage.tsx
-        │   ├── ExternalChatsPage.tsx   # WA + TG чаты
+        │   ├── ExternalChatsPage.tsx   # scrollSignal, unreadAtOpenRef
         │   ├── InternalChatsPage.tsx
-        │   └── ArchivePage.tsx
+        │   ├── ArchivePage.tsx
+        │   └── AdminPage.tsx           # сотрудники, орги, клиенты, фразы
         ├── components/
-        │   ├── ChatList/
-        │   │   └── ChatListItem.tsx    # Иконка канала + имя
-        │   ├── ChatWindow/
-        │   ├── ClientProfile/          # Боковая панель: ФИО, ИИН, орг.
-        │   ├── MessageInput/           # Текст + файл + шаблоны
-        │   ├── QuickPhrases/
-        │   └── AdminPanel/
+        │   ├── ChatWindow/             # separatorRef, isNearBottom scroll
+        │   ├── ClientProfile/          # cleanPhone(), org selector для workers
+        │   ├── MessageInput/           # drag&drop, мгновенная отправка фраз
+        │   ├── Sidebar/
+        │   └── ErrorBoundary/
         ├── store/
-        │   ├── authStore.ts
-        │   └── chatStore.ts
-        ├── api/                        # React Query hooks + axios
-        ├── socket/                     # WebSocket клиент
+        │   └── chatStore.ts            # activeNavPage, unreadExternal/Internal
+        ├── api/
+        ├── socket/
+        │   └── useWsEvents.ts          # звук, подавление звука по activeNavPage
         └── types/
             └── index.ts
 ```
@@ -323,16 +377,19 @@ DELETE /users/{id}
 
 # Организации
 GET    /organizations
-POST   /organizations          [admin]
+POST   /organizations          [admin] — парсит | для псевдонимов
 
 # Профили клиентов
-GET    /clients/{id}           # ФИО, ИИН, организация, канал, телефон/tg
+GET    /clients/{id}
+PATCH  /clients/{id}           — изменение organization_id (workers)
+DELETE /clients/{id}           [admin] — каскадное удаление
 
-# Внешние чаты (WA + TG)
-GET    /external/chats         # ?channel=whatsapp|telegram&status=active|archived
+# Внешние чаты
+GET    /external/chats         ?status=active|archived
 GET    /external/chats/{id}/messages
-POST   /external/chats/{id}/send     # { content, file_id? }
+POST   /external/chats/{id}/send
 POST   /external/chats/{id}/archive
+POST   /external/chats/{id}/unarchive
 GET    /external/archive
 
 # Внутренние чаты
@@ -342,86 +399,27 @@ GET    /internal/chats/{id}/messages
 POST   /internal/chats/{id}/send
 
 # Файлы
-POST   /files/upload
+POST   /files/upload               — JWT auth (сотрудники)
 GET    /files/{id}
+POST   /internal/files/upload      — Bearer bridge token (WA-bridge медиа)
 
 # Шаблонные фразы
 GET    /quick-phrases
 POST   /quick-phrases
 DELETE /quick-phrases/{id}
 
-# Внутренний webhook (WA-bridge → FastAPI, не открыт наружу)
-POST   /internal/wa-webhook    # Bearer внутренний токен
+# Внутренний webhook (WA-bridge → FastAPI)
+POST   /internal/wa-webhook        — Bearer WA_BRIDGE_TOKEN
 
 # WebSocket
-WS     /ws                     # ?token=<jwt>
+WS     /ws?token=<jwt>
 ```
 
 ### WebSocket события (сервер → клиент)
 ```json
-{ "type": "external:message:new",  "chatId": 1, "message": {...} }
-{ "type": "external:chat:new",     "chat": {...} }
-{ "type": "internal:message:new",  "chatId": 5, "message": {...} }
-{ "type": "client:onboarding:done","clientId": 12, "chatId": 1 }
-```
-
----
-
-## Docker Compose
-
-```yaml
-services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: fc_crm
-      POSTGRES_USER: crm_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U crm_user -d fc_crm"]
-      interval: 5s
-      retries: 10
-
-  backend:
-    build: ./backend
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+asyncpg://crm_user:${POSTGRES_PASSWORD}@postgres:5432/fc_crm
-      JWT_SECRET: ${JWT_SECRET}
-      WA_BRIDGE_URL: http://wa-bridge:3001
-      WA_BRIDGE_TOKEN: ${WA_BRIDGE_TOKEN}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      UPLOAD_DIR: /app/uploads
-    volumes:
-      - uploads_data:/app/uploads
-    ports:
-      - "8000:8000"
-
-  wa-bridge:
-    build: ./wa-bridge
-    environment:
-      FASTAPI_URL: http://backend:8000
-      FASTAPI_WEBHOOK_TOKEN: ${WA_BRIDGE_TOKEN}
-    volumes:
-      - wa_session:/app/.baileys_session
-    ports:
-      - "3001:3001"
-
-  frontend:
-    build: ./frontend
-    depends_on:
-      - backend
-    ports:
-      - "80:80"
-
-volumes:
-  postgres_data:
-  uploads_data:
-  wa_session:
+{ "type": "external:message:new",   "chatId": 1, "message": {...} }
+{ "type": "internal:message:new",   "chatId": 5, "message": {...} }
+{ "type": "client:onboarding:done", "chatId": 1, "clientId": 12, "channel": "whatsapp" }
 ```
 
 ---
@@ -429,61 +427,39 @@ volumes:
 ## Переменные окружения (.env)
 
 ```env
-# PostgreSQL
 POSTGRES_PASSWORD=strong_password_here
-
-# Backend
 JWT_SECRET=your-very-secret-key-min-32-chars
 WA_BRIDGE_TOKEN=internal-secret-between-services
-
-# Telegram
 TELEGRAM_BOT_TOKEN=123456789:AABBCCDDEEFFaabbccddeeff
-
-# WA Bridge
-# (используется FASTAPI_URL и FASTAPI_WEBHOOK_TOKEN из docker-compose)
-
-# Frontend (Vite build-time)
-VITE_API_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000
 ```
 
 ---
 
-## Профиль клиента в UI
+## Деплой и обслуживание
 
-При клике на пользователя в списке чатов (неважно WA или TG) — справа открывается панель:
+```bash
+# Первый запуск
+docker compose up -d --build
+docker compose exec backend alembic upgrade head
 
+# После изменения Python-кода (без изменений в requirements.txt)
+docker compose cp backend/app/... backend:/app/app/...
+docker compose restart backend
+
+# После изменений в Node.js или requirements.txt
+docker compose build <service>
+docker compose up -d <service>
+
+# Миграция БД после изменений моделей
+docker compose exec backend alembic upgrade head
+
+# Логи
+docker compose logs -f wa-bridge
+docker compose logs -f backend
 ```
-┌─────────────────────────────┐
-│  👤 Иванов Иван Иванович    │
-│  ─────────────────────────  │
-│  ИИН:       123456789012    │
-│  Организация: КазНУ         │
-│  Канал:    📱 WhatsApp      │
-│  Телефон:  +7 700 000 00 00 │
-│  Первое обращение: 12.06.26 │
-│  Сотрудник: Петрова А.      │
-└─────────────────────────────┘
-```
 
----
+## Известные ограничения
 
-## Порядок разработки (этапы)
-
-1. **Инфраструктура** — `docker-compose.yml`, `.env`, PostgreSQL healthcheck
-2. **Backend: БД** — SQLAlchemy модели, Alembic миграции, `alembic upgrade head`
-3. **Backend: Auth + Users** — JWT, bcrypt, роли admin/employee, seed admin
-4. **Backend: Organizations + ClientProfiles** — CRUD, endpoint профиля клиента
-5. **Backend: Telegram-бот** — aiogram 3, онбординг FSM, приём сообщений
-6. **WA-bridge** — Baileys, scan QR, вебхук в FastAPI, endpoint /send
-7. **Backend: WA webhook + External chats** — обработка входящих WA
-8. **Backend: Файлы** — загрузка, хранение, отдача
-9. **Backend: Internal chats** — сотрудник ↔ сотрудник
-10. **Backend: Quick phrases** — CRUD шаблонных фраз
-11. **Backend: WebSocket gateway** — real-time уведомления
-12. **Frontend: Auth** — страница входа, JWT в localStorage, guard роутинг
-13. **Frontend: External chats** — список (WA+TG иконки), окно, профиль клиента
-14. **Frontend: Internal chats** — внутренний мессенджер
-15. **Frontend: Архив** — просмотр архивированных чатов
-16. **Frontend: Шаблоны + Admin панель** — управление фразами, создание сотрудников
-17. **End-to-end тестирование** — онбординг WA, онбординг TG, отправка файлов
+- **`@lid` JID**: WhatsApp с 2024 использует privacy-JID (`@lid`) вместо номера телефона для незнакомых контактов. Реальный номер доступен только если контакт сохранён в адресной книге телефона, к которому привязан бот. Поле «Телефон» скрывается если номер не удалось определить.
+- **Звук уведомлений**: файл `notification.mp3` необходимо положить вручную в `frontend/public/sounds/notification.mp3` и пересобрать фронтенд.
+- **Baileys сессия**: при разрыве соединения бот переподключается автоматически (retry через 3с). При полном выходе из аккаунта (`loggedOut`) нужно пересканировать QR.
