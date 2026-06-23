@@ -1,6 +1,6 @@
 """
-Run once to create the initial admin user:
-  docker compose exec backend python -m app.models.seed
+Run:
+  docker compose exec backend python -m app.seeds.seed_admin
 """
 import asyncio
 from passlib.context import CryptContext

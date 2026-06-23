@@ -35,14 +35,20 @@ WA_BRIDGE_TOKEN=any-random-secret-string
 TELEGRAM_BOT_TOKEN=123456789:AABBCCDDEEFFaabbccddeeff
 ```
 
-**2. Запусти:**
+**2. Собери и запусти:**
 
 ```bash
 docker compose up -d --build
+
+# Подождать пока PostgreSQL поднимется, затем:
 docker compose exec backend alembic upgrade head
+docker compose exec backend python -m app.seeds.seed_admin
+docker compose exec backend python -m app.seeds.seed_employees
 ```
 
-**3. Открой [http://localhost](http://localhost) и войди с дефолтным admin-аккаунтом:**
+> Или одной командой: `bash init.sh` — сам дождётся PostgreSQL и выполнит всё по порядку.
+
+**3. Открой [http://localhost](http://localhost) и войди:**
 
 ```
 email:    admin@fc-crm.local
@@ -51,18 +57,30 @@ password: Admin1234!
 
 > Смени пароль сразу после первого входа.
 
-**4. Подключи WhatsApp** — зайди в логи wa-bridge и отсканируй QR:
+**4. Подключи WhatsApp** — отсканируй QR из логов:
 
 ```bash
 docker compose logs -f wa-bridge
 ```
 
-## Звук уведомлений
+## Сиды (начальные данные)
 
 ```bash
-docker compose build frontend
-docker compose up -d frontend
+# Создать admin-аккаунт (если ещё не создан)
+docker compose exec backend python -m app.seeds.seed_admin
+
+# Загрузить сотрудников и организации
+docker compose exec backend python -m app.seeds.seed_employees
+
+# Очистить БД (admin сохраняется)
+docker compose exec backend python -m app.seeds.clear_db
+
+# Полная очистка включая admin
+docker compose exec backend python -m app.seeds.clear_db --all
 ```
+
+> `seed_employees.py` содержит персональные данные сотрудников и добавлен в `.gitignore` —
+> файл не попадает в репозиторий, передаётся отдельно.
 
 ## Структура сервисов
 

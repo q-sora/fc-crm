@@ -10,3 +10,4 @@ build/
 uploads/
 *.log
 .DS_Store
+backend/app/seeds/seed_employees.py
