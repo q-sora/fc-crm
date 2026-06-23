@@ -28,7 +28,7 @@ def _file_url(stored_name: str) -> str:
     return f"/uploads/{stored_name}"
 
 
-def _build_msg_response(msg: InternalMessage, sender: User, file: File | None) -> InternalMessageResponse:
+def _build_msg_response(msg: InternalMessage, sender: User | None, file: File | None) -> InternalMessageResponse:
     file_short = None
     if file:
         file_short = FileShort(
@@ -41,7 +41,7 @@ def _build_msg_response(msg: InternalMessage, sender: User, file: File | None) -
         id=msg.id,
         chat_id=msg.chat_id,
         sender_id=msg.sender_id,
-        sender_name=sender.name,
+        sender_name=sender.name if sender else None,
         content=msg.content,
         message_type=msg.message_type,
         file=file_short,

@@ -16,7 +16,7 @@ async def list_organizations(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    result = await db.scalars(select(Organization).order_by(Organization.name))
+    result = await db.scalars(select(Organization).order_by(Organization.id))
     return result.all()
 
 

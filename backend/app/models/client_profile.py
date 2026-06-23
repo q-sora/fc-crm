@@ -40,7 +40,7 @@ class ClientProfile(Base):
     # Temporary storage during onboarding: {"name": "...", "iin": "..."}
     onboarding_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
-    assigned_employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     organization: Mapped["Organization | None"] = relationship(back_populates="client_profiles")  # noqa: F821

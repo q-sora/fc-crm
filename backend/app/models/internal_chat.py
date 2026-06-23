@@ -28,7 +28,7 @@ class InternalChatMember(Base):
     __tablename__ = "internal_chat_members"
 
     chat_id: Mapped[int] = mapped_column(ForeignKey("internal_chats.id"), primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chat: Mapped["InternalChat"] = relationship(back_populates="members")

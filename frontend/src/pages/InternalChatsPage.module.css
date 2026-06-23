@@ -16,15 +16,50 @@
 .listHeader {
   padding: 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.listHeaderRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .listTitle {
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.searchWrapper {
+  position: relative;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+}
+
+.search {
+  width: 100%;
+  padding: 8px 12px 8px 32px;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.search:focus {
+  border-color: var(--primary);
 }
 
 .newChatBtn {
@@ -482,4 +517,30 @@
 .unreadSeparatorLabel {
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.windowDropOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 185, 129, 0.06);
+  border: 2.5px dashed var(--primary);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.windowDropOverlayInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 600;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 36px 56px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }

@@ -79,8 +79,8 @@ export interface MemberShort {
 export interface InternalMessage {
   id: number
   chatId: number
-  senderId: number
-  senderName: string
+  senderId: number | null
+  senderName: string | null
   content: string | null
   messageType: InternalMessageType
   file: FileAttachment | null

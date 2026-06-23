@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { subscribeWs } from './socket'
 import { useChatStore } from '@/store/chatStore'
 import type { WsEvent } from '@/types'
@@ -14,33 +15,43 @@ function playNotification() {
 }
 
 export function useWsEvents(): void {
+  const queryClient = useQueryClient()
   const appendExternal = useChatStore((s) => s.appendExternalMessage)
   const updateLastMsg = useChatStore((s) => s.updateExternalChatLastMessage)
-  const prependChat = useChatStore((s) => s.prependExternalChat)
   const appendInternal = useChatStore((s) => s.appendInternalMessage)
 
   useEffect(() => {
     return subscribeWs((event: WsEvent) => {
       if (event.type === 'external:message:new') {
+        const { externalChats, activeExternalChatId, incrementUnreadExternal } = useChatStore.getState()
+        const chatInStore = externalChats.some((c) => c.id === event.chatId)
+
         appendExternal(event.chatId, event.message)
         updateLastMsg(event.chatId)
-        const { activeExternalChatId, incrementUnreadExternal } = useChatStore.getState()
+
+        if (!chatInStore) {
+          // New chat not yet in the list — refetch so it appears
+          queryClient.invalidateQueries({ queryKey: ['external-chats'] })
+        }
+
         if (event.chatId !== activeExternalChatId) {
           incrementUnreadExternal(event.chatId)
           playNotification()
         }
       }
+      if (event.type === 'client:onboarding:done') {
+        // New chat created — refresh list regardless of which page is active
+        queryClient.invalidateQueries({ queryKey: ['external-chats'] })
+      }
       if (event.type === 'internal:message:new') {
         appendInternal(event.chatId, event.message)
         const { activeInternalChatId, activeNavPage, incrementUnreadInternal, touchInternalChat } = useChatStore.getState()
         touchInternalChat(event.chatId)
-        // Sender never receives their own WS echo, so this is always from someone else
-        // Only suppress unread badge if actively viewing this exact chat on the internal page
         if (!(activeNavPage === 'internal' && event.chatId === activeInternalChatId)) {
           incrementUnreadInternal(event.chatId)
         }
         playNotification()
       }
     })
-  }, [appendExternal, updateLastMsg, prependChat, appendInternal])
+  }, [queryClient, appendExternal, updateLastMsg, appendInternal])
 }

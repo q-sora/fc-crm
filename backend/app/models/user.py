@@ -35,9 +35,9 @@ class User(Base):
         secondary=user_organizations,
         back_populates="users",
     )
-    assigned_external_chats: Mapped[list["ExternalChat"]] = relationship(back_populates="assigned_employee")  # noqa: F821
-    assigned_client_profiles: Mapped[list["ClientProfile"]] = relationship(back_populates="assigned_employee")  # noqa: F821
-    internal_chat_memberships: Mapped[list["InternalChatMember"]] = relationship(back_populates="user")  # noqa: F821
-    internal_messages_sent: Mapped[list["InternalMessage"]] = relationship(back_populates="sender")  # noqa: F821
-    quick_phrases: Mapped[list["QuickPhrase"]] = relationship(back_populates="created_by_user")  # noqa: F821
-    uploaded_files: Mapped[list["File"]] = relationship(back_populates="uploaded_by_user")  # noqa: F821
+    assigned_external_chats: Mapped[list["ExternalChat"]] = relationship(back_populates="assigned_employee", passive_deletes=True)  # noqa: F821
+    assigned_client_profiles: Mapped[list["ClientProfile"]] = relationship(back_populates="assigned_employee", passive_deletes=True)  # noqa: F821
+    internal_chat_memberships: Mapped[list["InternalChatMember"]] = relationship(back_populates="user", passive_deletes=True)  # noqa: F821
+    internal_messages_sent: Mapped[list["InternalMessage"]] = relationship(back_populates="sender", passive_deletes=True)  # noqa: F821
+    quick_phrases: Mapped[list["QuickPhrase"]] = relationship(back_populates="created_by_user", passive_deletes=True)  # noqa: F821
+    uploaded_files: Mapped[list["File"]] = relationship(back_populates="uploaded_by_user", passive_deletes=True)  # noqa: F821

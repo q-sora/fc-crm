@@ -27,8 +27,8 @@ class FileShort(BaseModel):
 class InternalMessageResponse(BaseModel):
     id: int
     chat_id: int
-    sender_id: int
-    sender_name: str
+    sender_id: int | None
+    sender_name: str | None
     content: str | None
     message_type: InternalMessageType
     file: FileShort | None

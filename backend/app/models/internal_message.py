@@ -18,7 +18,7 @@ class InternalMessage(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     chat_id: Mapped[int] = mapped_column(ForeignKey("internal_chats.id"), nullable=False, index=True)
-    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    sender_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     message_type: Mapped[InternalMessageType] = mapped_column(
         SAEnum(InternalMessageType), nullable=False, default=InternalMessageType.text

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getOrganizations } from '@/api/organizations'
 import { updateClient } from '@/api/clients'
@@ -11,7 +11,7 @@ interface Props {
 }
 
 function cleanPhone(phone: string): string | null {
-  if (phone.includes('@lid')) return null  // LID is internal WA identifier, not a real number
+  if (phone.includes('@lid')) return null
   return phone.split('@')[0]
 }
 
@@ -33,6 +33,7 @@ export default function ClientProfile({ client, onClose }: Props) {
   const qc = useQueryClient()
   const [editOrg, setEditOrg] = useState(false)
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(client.organization?.id ?? null)
+  const [orgSearch, setOrgSearch] = useState('')
 
   const { data: orgs = [] } = useQuery({
     queryKey: ['organizations'],
@@ -40,16 +41,28 @@ export default function ClientProfile({ client, onClose }: Props) {
     enabled: editOrg,
   })
 
+  const filteredOrgs = useMemo(() => {
+    const q = orgSearch.toLowerCase().trim()
+    return q ? orgs.filter((o) => o.name.toLowerCase().includes(q)) : orgs
+  }, [orgs, orgSearch])
+
   const orgMutation = useMutation({
     mutationFn: (orgId: number | null) => updateClient(client.id, { organization_id: orgId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['external-chats'] })
       setEditOrg(false)
+      setOrgSearch('')
     },
   })
 
   function handleOrgSave() {
     orgMutation.mutate(selectedOrgId)
+  }
+
+  function handleEditOrg() {
+    setSelectedOrgId(client.organization?.id ?? null)
+    setOrgSearch('')
+    setEditOrg(true)
   }
 
   return (
@@ -90,7 +103,7 @@ export default function ClientProfile({ client, onClose }: Props) {
           <div className={styles.fieldLabelRow}>
             <span className={styles.fieldLabel}>Организация</span>
             {!editOrg && (
-              <button className={styles.editOrgBtn} onClick={() => setEditOrg(true)}>
+              <button className={styles.editOrgBtn} onClick={handleEditOrg}>
                 {client.organization ? 'Изменить' : 'Указать'}
               </button>
             )}
@@ -98,25 +111,45 @@ export default function ClientProfile({ client, onClose }: Props) {
 
           {editOrg ? (
             <div className={styles.orgEditRow}>
-              <select
-                className={styles.orgSelect}
-                value={selectedOrgId ?? ''}
-                onChange={(e) => setSelectedOrgId(e.target.value ? Number(e.target.value) : null)}
+              <input
+                className={styles.orgSearchInput}
+                placeholder="Поиск организации..."
+                value={orgSearch}
+                onChange={(e) => setOrgSearch(e.target.value)}
                 autoFocus
-              >
-                <option value="">— Не указана —</option>
-                {orgs.map((o) => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
+              />
+              <div className={styles.orgList}>
+                <div
+                  className={`${styles.orgListItem} ${selectedOrgId === null ? styles.orgListItemSelected : ''}`}
+                  onClick={() => setSelectedOrgId(null)}
+                >
+                  — Не указана —
+                </div>
+                {filteredOrgs.map((o) => (
+                  <div
+                    key={o.id}
+                    className={`${styles.orgListItem} ${selectedOrgId === o.id ? styles.orgListItemSelected : ''}`}
+                    onClick={() => setSelectedOrgId(o.id)}
+                  >
+                    {o.name}
+                  </div>
                 ))}
-              </select>
-              <button
-                className={styles.orgSaveBtn}
-                onClick={handleOrgSave}
-                disabled={orgMutation.isPending}
-              >
-                {orgMutation.isPending ? '...' : 'Сохранить'}
-              </button>
-              <button className={styles.orgCancelBtn} onClick={() => setEditOrg(false)}>Отмена</button>
+                {filteredOrgs.length === 0 && orgSearch && (
+                  <div className={styles.orgListEmpty}>Не найдено</div>
+                )}
+              </div>
+              <div className={styles.orgActionRow}>
+                <button
+                  className={styles.orgSaveBtn}
+                  onClick={handleOrgSave}
+                  disabled={orgMutation.isPending}
+                >
+                  {orgMutation.isPending ? '...' : 'Сохранить'}
+                </button>
+                <button className={styles.orgCancelBtn} onClick={() => setEditOrg(false)}>
+                  Отмена
+                </button>
+              </div>
             </div>
           ) : (
             client.organization

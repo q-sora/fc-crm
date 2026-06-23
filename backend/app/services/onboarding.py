@@ -314,8 +314,27 @@ async def _complete_onboarding(
     await db.commit()
     await db.refresh(chat)
 
-    # Notify employee via WebSocket
-    if employee:
+    # Notify all employees in the org (not just the assigned one)
+    org_employees = (await db.scalars(
+        select(User)
+        .join(user_organizations, user_organizations.c.user_id == User.id)
+        .where(
+            user_organizations.c.organization_id == org.id,
+            User.is_active == True,  # noqa: E712
+        )
+    )).all()
+    notified: set[int] = set()
+    for emp in org_employees:
+        await manager.send_to_user(emp.id, {
+            "type": "client:onboarding:done",
+            "chatId": chat.id,
+            "clientId": profile.id,
+            "clientName": profile.full_name,
+            "channel": channel.value,
+        })
+        notified.add(emp.id)
+    # Also notify assigned employee if not already notified (e.g. admin fallback)
+    if employee and employee.id not in notified:
         await manager.send_to_user(employee.id, {
             "type": "client:onboarding:done",
             "chatId": chat.id,

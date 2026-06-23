@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getUsers, createUser, updateUser, deactivateUser, activateUser, deleteUser } from '@/api/users'
 import { getOrganizations, createOrganization, deleteOrganization } from '@/api/organizations'
 import { getClients, updateClient, deleteClient } from '@/api/clients'
 import type { User, UserRole, Organization, ClientProfile } from '@/types'
+import IconSearch from '@/components/icons/IconSearch'
 import styles from './AdminPage.module.css'
 
 type Tab = 'users' | 'orgs' | 'clients'
@@ -51,9 +52,18 @@ function UsersTab() {
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getUsers })
   const { data: orgs = [] } = useQuery({ queryKey: ['organizations'], queryFn: getOrganizations })
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return users
+    return users.filter((u) =>
+      u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+    )
+  }, [users, search])
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] })
 
@@ -69,7 +79,18 @@ function UsersTab() {
   return (
     <div>
       <div className={styles.sectionHeader}>
-        <span className={styles.count}>{users.length} пользователей</span>
+        <div className={styles.searchGroup}>
+          <div className={styles.searchWrapper}>
+            <span className={styles.searchIcon}><IconSearch size={14} /></span>
+            <input
+              className={styles.searchInput}
+              placeholder="Поиск по имени или email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <span className={styles.count}>{filtered.length} из {users.length} пользователей</span>
+        </div>
         <button className={styles.addBtn} onClick={() => { setShowCreate(true); setEditUser(null) }}>
           + Добавить
         </button>
@@ -104,7 +125,7 @@ function UsersTab() {
           </tr>
         </thead>
         <tbody>
-          {users.map((u) => (
+          {filtered.map((u) => (
             <tr key={u.id} className={!u.isActive ? styles.inactive : ''}>
               <td>{u.name}</td>
               <td className={styles.email}>{u.email}</td>
@@ -174,6 +195,11 @@ function CreateUserForm({ orgs, onClose, onCreated }: CreateProps) {
   })
   const [selectedOrgIds, setSelectedOrgIds] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [orgSearch, setOrgSearch] = useState('')
+  const filteredOrgs = useMemo(() => {
+    const q = orgSearch.toLowerCase().trim()
+    return q ? orgs.filter((o) => o.name.toLowerCase().includes(q)) : orgs
+  }, [orgs, orgSearch])
 
   const mutation = useMutation({
     mutationFn: () => createUser({
@@ -198,56 +224,69 @@ function CreateUserForm({ orgs, onClose, onCreated }: CreateProps) {
   }
 
   return (
-    <form className={styles.form} onSubmit={handleSubmit}>
-      <div className={styles.formTitle}>Новый пользователь</div>
-      <div className={styles.formGrid}>
-        <div className={styles.field}>
-          <label className={styles.label}>ФИО *</label>
-          <input className={styles.input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Иванов Иван" />
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <span className={styles.formTitle}>Новый пользователь</span>
+          <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
-        <div className={styles.field}>
-          <label className={styles.label}>Email *</label>
-          <input className={styles.input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@company.com" />
-        </div>
-        <div className={styles.field}>
-          <label className={styles.label}>Пароль *</label>
-          <input className={styles.input} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Минимум 8 символов" />
-        </div>
-        <div className={styles.field}>
-          <label className={styles.label}>Роль</label>
-          <select className={styles.input} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}>
-            <option value="employee">Сотрудник</option>
-            <option value="admin">Администратор</option>
-          </select>
-        </div>
-      </div>
-
-      {orgs.length > 0 && (
-        <div className={styles.field}>
-          <label className={styles.label}>Организации</label>
-          <div className={styles.orgCheckboxes}>
-            {orgs.map((o) => (
-              <label key={o.id} className={styles.orgCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={selectedOrgIds.includes(o.id)}
-                  onChange={() => toggleOrg(o.id)}
-                />
-                {o.name}
-              </label>
-            ))}
+        <form onSubmit={handleSubmit}>
+          <div className={styles.formGrid}>
+            <div className={styles.field}>
+              <label className={styles.label}>ФИО *</label>
+              <input className={styles.input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Иванов Иван" />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Email *</label>
+              <input className={styles.input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@company.com" />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Пароль *</label>
+              <input className={styles.input} type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Минимум 8 символов" />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Роль</label>
+              <select className={styles.input} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}>
+                <option value="employee">Сотрудник</option>
+                <option value="admin">Администратор</option>
+              </select>
+            </div>
           </div>
-        </div>
-      )}
 
-      {error && <div className={styles.error}>{error}</div>}
-      <div className={styles.formActions}>
-        <button type="button" className={styles.cancelBtn} onClick={onClose}>Отмена</button>
-        <button type="submit" className={styles.submitBtn} disabled={mutation.isPending}>
-          {mutation.isPending ? 'Создание...' : 'Создать'}
-        </button>
+          {orgs.length > 0 && (
+            <div className={styles.field}>
+              <label className={styles.label}>Организации</label>
+              <input
+                className={styles.orgSearch}
+                placeholder="Поиск организации..."
+                value={orgSearch}
+                onChange={(e) => setOrgSearch(e.target.value)}
+              />
+              <div className={styles.orgCheckboxes}>
+                {filteredOrgs.map((o) => (
+                  <label key={o.id} className={styles.orgCheckbox}>
+                    <input
+                      type="checkbox"
+                      checked={selectedOrgIds.includes(o.id)}
+                      onChange={() => toggleOrg(o.id)}
+                    />
+                    {o.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && <div className={styles.error}>{error}</div>}
+          <div className={styles.formActions}>
+            <button type="button" className={styles.cancelBtn} onClick={onClose}>Отмена</button>
+            <button type="submit" className={styles.submitBtn} disabled={mutation.isPending}>
+              {mutation.isPending ? 'Создание...' : 'Создать'}
+            </button>
+          </div>
+        </form>
       </div>
-    </form>
+    </div>
   )
 }
 
@@ -269,6 +308,11 @@ function EditUserModal({ user, orgs, onClose, onSaved }: EditProps) {
   })
   const [selectedOrgIds, setSelectedOrgIds] = useState<number[]>(user.organizations.map((o) => o.id))
   const [error, setError] = useState<string | null>(null)
+  const [orgSearch, setOrgSearch] = useState('')
+  const filteredOrgs = useMemo(() => {
+    const q = orgSearch.toLowerCase().trim()
+    return q ? orgs.filter((o) => o.name.toLowerCase().includes(q)) : orgs
+  }, [orgs, orgSearch])
 
   const mutation = useMutation({
     mutationFn: () => updateUser(user.id, {
@@ -315,7 +359,7 @@ function EditUserModal({ user, orgs, onClose, onSaved }: EditProps) {
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Новый пароль</label>
-              <input className={styles.input} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Оставьте пустым для сохранения" />
+              <input className={styles.input} type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Оставьте пустым для сохранения" />
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Роль</label>
@@ -329,8 +373,14 @@ function EditUserModal({ user, orgs, onClose, onSaved }: EditProps) {
           {orgs.length > 0 && (
             <div className={styles.field}>
               <label className={styles.label}>Организации</label>
+              <input
+                className={styles.orgSearch}
+                placeholder="Поиск организации..."
+                value={orgSearch}
+                onChange={(e) => setOrgSearch(e.target.value)}
+              />
               <div className={styles.orgCheckboxes}>
-                {orgs.map((o) => (
+                {filteredOrgs.map((o) => (
                   <label key={o.id} className={styles.orgCheckbox}>
                     <input
                       type="checkbox"
@@ -362,8 +412,21 @@ function EditUserModal({ user, orgs, onClose, onSaved }: EditProps) {
 function ClientsTab() {
   const qc = useQueryClient()
   const [editClient, setEditClient] = useState<ClientProfile | null>(null)
+  const [search, setSearch] = useState('')
   const { data: clients = [] } = useQuery({ queryKey: ['clients'], queryFn: getClients })
   const { data: orgs = [] } = useQuery({ queryKey: ['organizations'], queryFn: getOrganizations })
+
+  const filteredClients = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return clients
+    return clients.filter((c) =>
+      c.fullName?.toLowerCase().includes(q) ||
+      c.iin?.includes(q) ||
+      c.organization?.name.toLowerCase().includes(q) ||
+      c.whatsappPhone?.includes(q) ||
+      c.telegramUsername?.toLowerCase().includes(q)
+    )
+  }, [clients, search])
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['clients'] })
   const deleteMutation = useMutation({ mutationFn: deleteClient, onSuccess: invalidate })
@@ -377,7 +440,18 @@ function ClientsTab() {
   return (
     <div>
       <div className={styles.sectionHeader}>
-        <span className={styles.count}>{clients.length} клиентов</span>
+        <div className={styles.searchGroup}>
+          <div className={styles.searchWrapper}>
+            <span className={styles.searchIcon}><IconSearch size={14} /></span>
+            <input
+              className={styles.searchInput}
+              placeholder="Поиск по имени, ИИН, организации..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <span className={styles.count}>{filteredClients.length} из {clients.length} клиентов</span>
+        </div>
       </div>
 
       {editClient && (
@@ -401,7 +475,7 @@ function ClientsTab() {
           </tr>
         </thead>
         <tbody>
-          {clients.map((c) => (
+          {filteredClients.map((c) => (
             <tr key={c.id}>
               <td>{c.fullName ?? <span className={styles.muted}>—</span>}</td>
               <td className={styles.muted}>{c.iin ?? '—'}</td>
@@ -522,8 +596,18 @@ function OrgsTab() {
   const qc = useQueryClient()
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: orgs = [] } = useQuery({ queryKey: ['organizations'], queryFn: getOrganizations })
+
+  const filteredOrgs = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return orgs
+    return orgs.filter((o) =>
+      o.name.toLowerCase().includes(q) ||
+      o.aliases?.some((a) => a.toLowerCase().includes(q))
+    )
+  }, [orgs, search])
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['organizations'] })
 
@@ -554,7 +638,18 @@ function OrgsTab() {
   return (
     <div>
       <div className={styles.sectionHeader}>
-        <span className={styles.count}>{orgs.length} организаций</span>
+        <div className={styles.searchGroup}>
+          <div className={styles.searchWrapper}>
+            <span className={styles.searchIcon}><IconSearch size={14} /></span>
+            <input
+              className={styles.searchInput}
+              placeholder="Поиск по названию..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <span className={styles.count}>{filteredOrgs.length} из {orgs.length} организаций</span>
+        </div>
       </div>
       <form onSubmit={handleCreate} style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
@@ -579,7 +674,7 @@ function OrgsTab() {
           <tr><th>ID</th><th>Название</th><th>Создана</th><th></th></tr>
         </thead>
         <tbody>
-          {orgs.map((o) => (
+          {filteredOrgs.map((o) => (
             <tr key={o.id}>
               <td className={styles.muted}>{o.id}</td>
               <td>

@@ -21,11 +21,10 @@ router = APIRouter()
 
 
 def _user_chat_filter(q, user: User):
-    """Restrict query to chats the user has access to."""
+    """Show chats assigned to the user OR whose client belongs to the user's organizations."""
     user_org_ids = [org.id for org in user.organizations]
     conditions = [
         ExternalChat.assigned_employee_id == user.id,
-        ExternalChat.assigned_employee_id.is_(None),  # Unassigned — visible to everyone
     ]
     if user_org_ids:
         conditions.append(
@@ -35,8 +34,6 @@ def _user_chat_filter(q, user: User):
 
 
 def _can_access_chat(chat: ExternalChat, user: User) -> bool:
-    if chat.assigned_employee_id is None:  # Unassigned — accessible to all
-        return True
     if chat.assigned_employee_id == user.id:
         return True
     user_org_ids = {org.id for org in user.organizations}

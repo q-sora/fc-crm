@@ -1,13 +1,14 @@
-import { Fragment, useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { Fragment, useEffect, useRef, useState, useCallback, useMemo, type DragEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getInternalChats, getInternalMessages, sendInternalMessage, createInternalChat } from '@/api/internalChats'
 import { getUsers } from '@/api/users'
 import { useChatStore } from '@/store/chatStore'
 import { useAuthStore } from '@/store/authStore'
-import MessageInput from '@/components/MessageInput/MessageInput'
+import MessageInput, { type MessageInputHandle } from '@/components/MessageInput/MessageInput'
 import NewChatModal from '@/components/NewChatModal/NewChatModal'
 import ForwardModal from '@/components/ForwardModal/ForwardModal'
 import IconPlus from '@/components/icons/IconPlus'
+import IconSearch from '@/components/icons/IconSearch'
 import IconUser from '@/components/icons/IconUser'
 import IconGroup from '@/components/icons/IconGroup'
 import IconAttach from '@/components/icons/IconAttach'
@@ -26,10 +27,14 @@ export default function InternalChatsPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
   const separatorRef = useRef<HTMLDivElement>(null)
+  const msgInputRef = useRef<MessageInputHandle>(null)
+  const [windowDragOver, setWindowDragOver] = useState(false)
+  const windowDragCounterRef = useRef(0)
   const qc = useQueryClient()
   const setActiveNavPage = useChatStore((s) => s.setActiveNavPage)
   useEffect(() => { setActiveNavPage('internal'); return () => setActiveNavPage(null) }, [setActiveNavPage])
   const [showNewChat, setShowNewChat] = useState(false)
+  const [search, setSearch] = useState('')
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const closeLightbox = useCallback(() => setLightboxSrc(null), [])
@@ -125,6 +130,15 @@ export default function InternalChatsPage() {
 
   const activeChat = allChats.find((c) => c.id === activeId) ?? null
 
+  const filteredChats = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return allChats
+    return allChats.filter((chat) => {
+      if (chat.type === 'group') return (chat.name ?? '').toLowerCase().includes(q)
+      return chat.members.some((m) => m.id !== currentUser?.id && m.name.toLowerCase().includes(q))
+    })
+  }, [allChats, search, currentUser?.id])
+
   function getChatLabel(chat: typeof allChats[0]) {
     if (chat.type === 'group') return chat.name ?? 'Группа'
     const other = chat.members.find((m) => m.id !== currentUser?.id)
@@ -141,6 +155,29 @@ export default function InternalChatsPage() {
     const msg = await sendInternalMessage(activeId, { content, fileId })
     appendMsg(activeId, msg)
     touchInternalChat(activeId)
+  }
+
+  function handleWindowDragEnter(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    windowDragCounterRef.current++
+    if (windowDragCounterRef.current === 1) setWindowDragOver(true)
+  }
+
+  function handleWindowDragLeave() {
+    windowDragCounterRef.current--
+    if (windowDragCounterRef.current === 0) setWindowDragOver(false)
+  }
+
+  function handleWindowDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+  }
+
+  async function handleWindowDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    windowDragCounterRef.current = 0
+    setWindowDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) await msgInputRef.current?.handleFileDrop(file)
   }
 
   async function handleCreateChat(type: 'direct' | 'group', memberIds: number[], name?: string) {
@@ -178,16 +215,28 @@ export default function InternalChatsPage() {
     <div className={styles.page}>
       <div className={styles.chatListPanel}>
         <div className={styles.listHeader}>
-          <span className={styles.listTitle}>Команда</span>
-          <button className={styles.newChatBtn} onClick={() => setShowNewChat(true)} title="Новый чат">
-            <IconPlus size={16} />
-          </button>
+          <div className={styles.listHeaderRow}>
+            <span className={styles.listTitle}>Команда</span>
+            <button className={styles.newChatBtn} onClick={() => setShowNewChat(true)} title="Новый чат">
+              <IconPlus size={16} />
+            </button>
+          </div>
+          <div className={styles.searchWrapper}>
+            <span className={styles.searchIcon}><IconSearch size={16} /></span>
+            <input
+              className={styles.search}
+              type="text"
+              placeholder="Поиск..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
         <div className={styles.chatItems}>
-          {allChats.length === 0 && (
-            <div className={styles.empty}>Нет чатов</div>
+          {filteredChats.length === 0 && (
+            <div className={styles.empty}>{search ? 'Чаты не найдены' : 'Нет чатов'}</div>
           )}
-          {allChats.map((chat) => (
+          {filteredChats.map((chat) => (
             <button
               key={chat.id}
               className={`${styles.chatItem} ${chat.id === activeId ? styles.active : ''}`}
@@ -221,7 +270,21 @@ export default function InternalChatsPage() {
         </div>
       </div>
 
-      <div className={styles.window}>
+      <div
+        className={styles.window}
+        onDragEnter={activeChat ? handleWindowDragEnter : undefined}
+        onDragLeave={activeChat ? handleWindowDragLeave : undefined}
+        onDragOver={activeChat ? handleWindowDragOver : undefined}
+        onDrop={activeChat ? handleWindowDrop : undefined}
+      >
+        {windowDragOver && activeChat && (
+          <div className={styles.windowDropOverlay}>
+            <div className={styles.windowDropOverlayInner}>
+              <IconAttach size={36} />
+              <span>Перетащите файл для отправки</span>
+            </div>
+          </div>
+        )}
         {!activeChat ? (
           <div className={styles.placeholder}>
             <IconGroup size={40} />
@@ -245,7 +308,7 @@ export default function InternalChatsPage() {
             <div className={styles.windowMessages} ref={messagesRef}>
               {activeMsgs.map((msg, idx) => {
                 const isMine = msg.senderId === currentUser?.id
-                const initials = msg.senderName.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
+                const initials = (msg.senderName ?? '?').split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
                 const prevMsg = activeMsgs[idx - 1]
                 const nextMsg = activeMsgs[idx + 1]
                 const isFirstInGroup = !prevMsg || prevMsg.senderId !== msg.senderId
@@ -264,7 +327,7 @@ export default function InternalChatsPage() {
                     >
                       {!isMine && (
                         isLastInGroup
-                          ? <div className={styles.msgAvatar} title={msg.senderName}>{initials}</div>
+                          ? <div className={styles.msgAvatar} title={msg.senderName ?? undefined}>{initials}</div>
                           : <div className={styles.msgAvatarSpacer} />
                       )}
                       <div className={styles.msgBody}>
@@ -335,7 +398,7 @@ export default function InternalChatsPage() {
                 <IconChevronDown size={20} />
               </button>
             )}
-            <MessageInput chatId={activeChat.id} onSend={handleSend} />
+            <MessageInput ref={msgInputRef} chatId={activeChat.id} onSend={handleSend} showDragOverlay={false} />
           </>
         )}
       </div>
