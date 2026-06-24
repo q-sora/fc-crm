@@ -515,9 +515,15 @@ function EditClientModal({ client, orgs, onClose, onSaved }: EditClientProps) {
   const [form, setForm] = useState({
     fullName: client.fullName ?? '',
     iin: client.iin ?? '',
-    organizationId: client.organization?.id ?? null as number | null,
+    organizationId: (client.organization?.id ?? null) as number | null,
   })
+  const [orgSearch, setOrgSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  const filteredOrgs = useMemo(() => {
+    const q = orgSearch.toLowerCase().trim()
+    return q ? orgs.filter((o) => o.name.toLowerCase().includes(q)) : orgs
+  }, [orgs, orgSearch])
 
   const mutation = useMutation({
     mutationFn: () => updateClient(client.id, {
@@ -563,20 +569,42 @@ function EditClientModal({ client, orgs, onClose, onSaved }: EditClientProps) {
                 maxLength={12}
               />
             </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Организация</label>
-              <select
-                className={styles.input}
-                value={form.organizationId ?? ''}
-                onChange={(e) => setForm({ ...form, organizationId: e.target.value ? Number(e.target.value) : null })}
-              >
-                <option value="">— Не указана —</option>
-                {orgs.map((o) => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
-                ))}
-              </select>
-            </div>
           </div>
+
+          {orgs.length > 0 && (
+            <div className={styles.field} style={{ marginTop: 12 }}>
+              <label className={styles.label}>Организация</label>
+              <input
+                className={styles.orgSearch}
+                placeholder="Поиск организации..."
+                value={orgSearch}
+                onChange={(e) => setOrgSearch(e.target.value)}
+              />
+              <div className={styles.orgCheckboxes} style={{ maxHeight: 180, overflowY: 'auto' }}>
+                <label className={styles.orgCheckbox}>
+                  <input
+                    type="radio"
+                    name="org"
+                    checked={form.organizationId === null}
+                    onChange={() => setForm({ ...form, organizationId: null })}
+                  />
+                  — Не указана —
+                </label>
+                {filteredOrgs.map((o) => (
+                  <label key={o.id} className={styles.orgCheckbox}>
+                    <input
+                      type="radio"
+                      name="org"
+                      checked={form.organizationId === o.id}
+                      onChange={() => setForm({ ...form, organizationId: o.id })}
+                    />
+                    {o.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           {error && <div className={styles.error}>{error}</div>}
           <div className={styles.formActions}>
             <button type="button" className={styles.cancelBtn} onClick={onClose}>Отмена</button>
