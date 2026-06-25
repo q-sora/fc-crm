@@ -1,4 +1,4 @@
-DC = docker-compose -f docker-compose.yml
+DC = docker compose -f docker-compose.yml
 
 .PHONY: up down build rebuild logs ps \
         init setup \
