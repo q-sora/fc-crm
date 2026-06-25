@@ -48,16 +48,16 @@ ps:
 # ── Per-service build & restart ───────────────────────────────────────────────
 
 build-backend:
-	$(DC) build backend && $(DC) up -d backend
+	$(DC) build backend && $(DC) rm -f backend && $(DC) up -d backend
 
 build-frontend:
-	$(DC) build frontend && $(DC) up -d frontend
+	$(DC) build frontend && $(DC) rm -f frontend && $(DC) up -d frontend
 
 rebuild-backend:
-	$(DC) build --no-cache backend && $(DC) up -d backend
+	$(DC) build --no-cache backend && $(DC) rm -f backend && $(DC) up -d backend
 
 rebuild-frontend:
-	$(DC) build --no-cache frontend && $(DC) up -d frontend
+	$(DC) build --no-cache frontend && $(DC) rm -f frontend && $(DC) up -d frontend
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 
