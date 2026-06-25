@@ -38,15 +38,10 @@ TELEGRAM_BOT_TOKEN=123456789:AABBCCDDEEFFaabbccddeeff
 **2. Собери и запусти:**
 
 ```bash
-docker compose up -d --build
-
-# Подождать пока PostgreSQL поднимется, затем:
-docker compose exec backend alembic upgrade head
-docker compose exec backend python -m app.seeds.seed_admin
-docker compose exec backend python -m app.seeds.seed_employees
+make init
 ```
 
-> Или одной командой: `bash init.sh` — сам дождётся PostgreSQL и выполнит всё по порядку.
+Команда сама соберёт все образы, дождётся PostgreSQL, применит миграции и загрузит начальные данные.
 
 **3. Открой [http://localhost](http://localhost) и войди:**
 
@@ -60,24 +55,37 @@ password: Admin1234!
 **4. Подключи WhatsApp** — отсканируй QR из логов:
 
 ```bash
-docker compose logs -f wa-bridge
+make logs-wa
 ```
 
-## Сиды (начальные данные)
+## Makefile
 
-```bash
-# Создать admin-аккаунт (если ещё не создан)
-docker compose exec backend python -m app.seeds.seed_admin
+Все частые операции вынесены в `make`-команды:
 
-# Загрузить сотрудников и организации
-docker compose exec backend python -m app.seeds.seed_employees
-
-# Очистить БД (admin сохраняется)
-docker compose exec backend python -m app.seeds.clear_db
-
-# Полная очистка включая admin
-docker compose exec backend python -m app.seeds.clear_db --all
-```
+| Команда | Описание |
+|---|---|
+| `make init` | Первоначальная сборка: образы + миграции + сиды |
+| `make up` | Запустить все сервисы |
+| `make down` | Остановить все сервисы |
+| `make ps` | Статус контейнеров |
+| **Сборка** | |
+| `make build-backend` | Пересобрать и перезапустить бекенд |
+| `make build-frontend` | Пересобрать и перезапустить фронтенд |
+| `make rebuild-backend` | То же, без кэша |
+| `make rebuild-frontend` | То же, без кэша |
+| **Логи** | |
+| `make logs-backend` | Логи бекенда |
+| `make logs-frontend` | Логи фронтенда |
+| `make logs-db` | Логи PostgreSQL |
+| `make logs-wa` | Логи WhatsApp (QR-код здесь) |
+| **Шелл** | |
+| `make shell-backend` | Войти в контейнер бекенда |
+| `make shell-db` | Войти в psql |
+| **База данных** | |
+| `make migrate` | Применить миграции Alembic |
+| `make seed` | Загрузить начальные данные |
+| `make clear-db` | Очистить БД (admin сохраняется) |
+| `make reset-wa` | Сбросить сессию WhatsApp и показать новый QR |
 
 > `seed_employees.py` содержит персональные данные сотрудников и добавлен в `.gitignore` —
 > файл не попадает в репозиторий, передаётся отдельно.
@@ -94,16 +102,14 @@ frontend   — React + nginx (порт 80)
 ## Обновление кода
 
 ```bash
-# Python-файлы без изменений в зависимостях
-docker compose cp backend/app/. backend:/app/app/
-docker compose restart backend
+# Пересобрать бекенд после изменений
+make build-backend
 
-# После изменений зависимостей или Dockerfile
-docker compose build <service>
-docker compose up -d <service>
+# Пересобрать фронтенд после изменений
+make build-frontend
 
-# Миграции БД
-docker compose exec backend alembic upgrade head
+# Применить новые миграции БД
+make migrate
 ```
 
 ## Детальная документация

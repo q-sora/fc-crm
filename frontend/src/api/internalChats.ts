@@ -39,3 +39,12 @@ export async function sendInternalMessage(
   )
   return data
 }
+
+export async function updateChatMembers(chatId: number, memberIds: number[]): Promise<InternalChat> {
+  const { data } = await client.patch<InternalChat>(`/internal/chats/${chatId}/members`, { member_ids: memberIds })
+  return data
+}
+
+export async function deleteInternalChat(chatId: number): Promise<void> {
+  await client.delete(`/internal/chats/${chatId}`)
+}

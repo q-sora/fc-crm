@@ -6,7 +6,7 @@ DC = docker-compose -f docker-compose.yml
         rebuild-backend rebuild-frontend \
         logs-backend logs-frontend logs-db \
         shell-backend shell-db \
-        migrate seed clear-db
+        migrate seed clear-db reset-wa
 
 # ── First-time setup ───────────────────────────────────────────────────────────
 
@@ -94,3 +94,9 @@ seed:
 
 clear-db:
 	$(DC) exec backend python -m app.seeds.clear_db
+
+reset-wa:
+	$(DC) rm -sf wa-bridge
+	docker volume rm whatsapp-crm_wa_session
+	$(DC) up -d wa-bridge
+	@echo "==> Scan QR: make logs-wa"

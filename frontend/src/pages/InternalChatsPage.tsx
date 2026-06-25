@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useRef, useState, useCallback, useMemo, type DragEvent } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getInternalChats, getInternalMessages, sendInternalMessage, createInternalChat } from '@/api/internalChats'
+import { Fragment, useEffect, useRef, useState, useCallback, useMemo, type DragEvent, type FC } from 'react'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { getInternalChats, getInternalMessages, sendInternalMessage, createInternalChat, updateChatMembers, deleteInternalChat } from '@/api/internalChats'
 import { getUsers } from '@/api/users'
+import type { User, InternalChat } from '@/types'
 import { useChatStore } from '@/store/chatStore'
 import { useAuthStore } from '@/store/authStore'
 import MessageInput, { type MessageInputHandle } from '@/components/MessageInput/MessageInput'
@@ -15,11 +16,74 @@ import IconAttach from '@/components/icons/IconAttach'
 import IconFile from '@/components/icons/IconFile'
 import IconForward from '@/components/icons/IconForward'
 import IconChevronDown from '@/components/icons/IconChevronDown'
+import IconTrash from '@/components/icons/IconTrash'
+import IconUserPlus from '@/components/icons/IconUserPlus'
 import ImageLightbox from '@/components/ImageLightbox/ImageLightbox'
 import styles from './InternalChatsPage.module.css'
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+}
+
+interface EditMembersModalProps {
+  chat: InternalChat
+  users: User[]
+  currentUserId: number
+  onClose: () => void
+  onSave: (memberIds: number[]) => Promise<void>
+}
+
+const EditMembersModal: FC<EditMembersModalProps> = ({ chat, users, currentUserId, onClose, onSave }) => {
+  const currentMemberIds = chat.members.map((m) => m.id)
+  const [selected, setSelected] = useState<number[]>(currentMemberIds)
+  const mutation = useMutation({ mutationFn: () => onSave(selected) })
+
+  function toggle(id: number) {
+    setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }
+
+  const others = users.filter((u) => u.isActive)
+
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <span className={styles.modalTitle}>Участники: {chat.name}</span>
+          <button className={styles.modalClose} onClick={onClose}>✕</button>
+        </div>
+        <div className={styles.membersList}>
+          {others.map((u) => (
+            <label key={u.id} className={styles.memberRow}>
+              <input
+                type="checkbox"
+                checked={selected.includes(u.id)}
+                onChange={() => toggle(u.id)}
+              />
+              <div className={styles.memberAvatar}>
+                {u.name.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()}
+              </div>
+              <div className={styles.memberInfo}>
+                <span className={styles.memberName}>
+                  {u.name}{u.id === currentUserId ? ' (Вы)' : ''}
+                </span>
+                <span className={styles.memberRole}>{u.role === 'admin' ? 'Администратор' : 'Сотрудник'}</span>
+              </div>
+            </label>
+          ))}
+        </div>
+        <div className={styles.modalFooter}>
+          <button className={styles.modalCancelBtn} onClick={onClose}>Отмена</button>
+          <button
+            className={styles.modalSaveBtn}
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? 'Сохранение...' : 'Сохранить'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function InternalChatsPage() {
@@ -34,6 +98,7 @@ export default function InternalChatsPage() {
   const setActiveNavPage = useChatStore((s) => s.setActiveNavPage)
   useEffect(() => { setActiveNavPage('internal'); return () => setActiveNavPage(null) }, [setActiveNavPage])
   const [showNewChat, setShowNewChat] = useState(false)
+  const [showEditMembers, setShowEditMembers] = useState(false)
   const [search, setSearch] = useState('')
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
@@ -180,6 +245,21 @@ export default function InternalChatsPage() {
     if (file) await msgInputRef.current?.handleFileDrop(file)
   }
 
+  async function handleDeleteChat() {
+    if (!activeId) return
+    if (!confirm('Удалить чат? Все сообщения будут удалены.')) return
+    await deleteInternalChat(activeId)
+    setActive(null)
+    await qc.invalidateQueries({ queryKey: ['internal-chats'] })
+  }
+
+  async function handleUpdateMembers(memberIds: number[]) {
+    if (!activeId) return
+    await updateChatMembers(activeId, memberIds)
+    await qc.invalidateQueries({ queryKey: ['internal-chats'] })
+    setShowEditMembers(false)
+  }
+
   async function handleCreateChat(type: 'direct' | 'group', memberIds: number[], name?: string) {
     const chat = await createInternalChat({ type, memberIds, name })
     await qc.invalidateQueries({ queryKey: ['internal-chats'] })
@@ -303,6 +383,16 @@ export default function InternalChatsPage() {
                 <span className={styles.headerName}>{headerInfo?.name}</span>
                 <span className={styles.headerSub}>{headerInfo?.sub}</span>
               </div>
+              <div className={styles.headerActions}>
+                {headerInfo?.isGroup && (
+                  <button className={styles.headerIconBtn} onClick={() => setShowEditMembers(true)} title="Изменить участников">
+                    <IconUserPlus size={18} />
+                  </button>
+                )}
+                <button className={`${styles.headerIconBtn} ${styles.headerIconBtnDanger}`} onClick={handleDeleteChat} title="Удалить чат">
+                  <IconTrash size={18} />
+                </button>
+              </div>
             </div>
 
             <div className={styles.windowMessages} ref={messagesRef}>
@@ -409,6 +499,16 @@ export default function InternalChatsPage() {
           users={users}
           onClose={() => setShowNewChat(false)}
           onCreate={handleCreateChat}
+        />
+      )}
+
+      {showEditMembers && activeChat && (
+        <EditMembersModal
+          chat={activeChat}
+          users={users}
+          currentUserId={currentUser?.id ?? 0}
+          onClose={() => setShowEditMembers(false)}
+          onSave={handleUpdateMembers}
         />
       )}
 

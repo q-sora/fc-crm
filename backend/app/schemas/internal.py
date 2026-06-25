@@ -50,3 +50,7 @@ class SendInternalMessageRequest(BaseModel):
     content: str | None = None
     file_id: int | None = None
     is_forwarded: bool = False
+
+
+class UpdateChatMembersRequest(BaseModel):
+    member_ids: list[int]

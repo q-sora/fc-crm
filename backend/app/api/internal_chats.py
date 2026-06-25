@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, delete
 
 from app.database import get_db
 from app.models.file import File
@@ -17,6 +17,7 @@ from app.schemas.internal import (
     MemberShort,
     FileShort,
     SendInternalMessageRequest,
+    UpdateChatMembersRequest,
 )
 from app.api.deps import get_current_user
 from app.websocket.manager import manager
@@ -255,3 +256,67 @@ async def send_message(
         await manager.send_to_user(m.user_id, ws_payload)
 
     return _build_msg_response(msg, current_user, file_record)
+
+
+@router.patch("/chats/{chat_id}/members", response_model=InternalChatResponse)
+async def update_chat_members(
+    chat_id: int,
+    body: UpdateChatMembersRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    chat = await db.scalar(
+        select(InternalChat)
+        .options(selectinload(InternalChat.members).selectinload(InternalChatMember.user))
+        .where(InternalChat.id == chat_id)
+    )
+    if not chat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    if chat.type != InternalChatType.group:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only group chats support member editing")
+    member_ids = await db.scalar(
+        select(InternalChatMember.user_id).where(
+            InternalChatMember.chat_id == chat_id,
+            InternalChatMember.user_id == current_user.id,
+        )
+    )
+    if not member_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member")
+
+    new_ids = set(body.member_ids)
+
+    await db.execute(
+        delete(InternalChatMember).where(InternalChatMember.chat_id == chat_id)
+    )
+    for uid in new_ids:
+        db.add(InternalChatMember(chat_id=chat_id, user_id=uid))
+    await db.commit()
+
+    chat = await db.scalar(
+        select(InternalChat)
+        .options(selectinload(InternalChat.members).selectinload(InternalChatMember.user))
+        .where(InternalChat.id == chat_id)
+    )
+    members = [MemberShort(id=m.user.id, name=m.user.name) for m in chat.members]
+    return InternalChatResponse(id=chat.id, type=chat.type, name=chat.name, members=members, created_at=chat.created_at)
+
+
+@router.delete("/chats/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_chat(
+    chat_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    member = await db.scalar(
+        select(InternalChatMember).where(
+            InternalChatMember.chat_id == chat_id,
+            InternalChatMember.user_id == current_user.id,
+        )
+    )
+    if not member:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member")
+
+    await db.execute(delete(InternalMessage).where(InternalMessage.chat_id == chat_id))
+    await db.execute(delete(InternalChatMember).where(InternalChatMember.chat_id == chat_id))
+    await db.execute(delete(InternalChat).where(InternalChat.id == chat_id))
+    await db.commit()
