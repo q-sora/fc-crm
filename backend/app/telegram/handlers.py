@@ -56,21 +56,27 @@ async def _process(
     user = message.from_user
     external_id = str(user.id)
     tg_username = user.username
+    print(f"[tg] msg from {external_id} ({tg_username}): {repr(text)}", flush=True)
 
-    async with AsyncSessionLocal() as db:
-        reply = await handle_incoming(
-            channel=Channel.telegram,
-            external_id=external_id,
-            text=text,
-            db=db,
-            tg_username=tg_username,
-            tg_message_id=message.message_id,
-            message_type=msg_type,
-            file_id=file_id,
-        )
+    try:
+        async with AsyncSessionLocal() as db:
+            reply = await handle_incoming(
+                channel=Channel.telegram,
+                external_id=external_id,
+                text=text,
+                db=db,
+                tg_username=tg_username,
+                tg_message_id=message.message_id,
+                message_type=msg_type,
+                file_id=file_id,
+            )
 
-    if reply:
-        await message.answer(reply)
+        if reply:
+            await message.answer(reply)
+    except Exception:
+        import traceback
+        print(f"[tg] handler error for {external_id}:", flush=True)
+        traceback.print_exc()
 
 
 @dp.message(CommandStart())

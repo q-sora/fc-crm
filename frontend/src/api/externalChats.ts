@@ -42,3 +42,7 @@ export async function archiveChat(chatId: number): Promise<void> {
 export async function unarchiveChat(chatId: number): Promise<void> {
   await client.post(`/external/chats/${chatId}/unarchive`)
 }
+
+export async function deleteExternalChat(chatId: number): Promise<void> {
+  await client.delete(`/external/chats/${chatId}`)
+}

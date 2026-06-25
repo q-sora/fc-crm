@@ -392,8 +392,19 @@ async def _save_incoming_message(
             ExternalChat.status == ChatStatus.active,
         )
     )
+    is_new_chat = False
     if not chat:
-        return
+        # Profile exists but active chat was deleted — re-open a new chat
+        chat = ExternalChat(
+            client_profile_id=profile.id,
+            assigned_employee_id=profile.assigned_employee_id,
+            channel=profile.channel,
+            status=ChatStatus.active,
+            last_message_at=datetime.now(timezone.utc),
+        )
+        db.add(chat)
+        await db.flush()
+        is_new_chat = True
 
     msg = ExternalMessage(
         chat_id=chat.id,
@@ -462,3 +473,25 @@ async def _save_incoming_message(
         )).all()
         for u in all_users:
             await manager.send_to_user(u.id, ws_payload)
+        notified = {u.id for u in all_users}
+    else:
+        # Admins see all chats — always notify them regardless of org/assignee
+        admins = (await db.scalars(
+            select(User).where(User.role == UserRole.admin, User.is_active == True)  # noqa: E712
+        )).all()
+        for admin in admins:
+            if admin.id not in notified:
+                await manager.send_to_user(admin.id, ws_payload)
+                notified.add(admin.id)
+
+    # If a new chat was re-opened, also send onboarding:done so the chat list refreshes
+    if is_new_chat:
+        new_chat_payload = {
+            "type": "client:onboarding:done",
+            "chatId": chat.id,
+            "clientId": profile.id,
+            "clientName": profile.full_name,
+            "channel": profile.channel.value,
+        }
+        for uid in notified:
+            await manager.send_to_user(uid, new_chat_payload)

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getExternalChats, getChatMessages, sendExternalMessage, archiveChat } from '@/api/externalChats'
+import { getExternalChats, getChatMessages, sendExternalMessage, archiveChat, deleteExternalChat } from '@/api/externalChats'
 import { useChatStore } from '@/store/chatStore'
 import { subscribeWs } from '@/socket/socket'
 import ChatList from '@/components/ChatList/ChatList'
@@ -93,6 +93,15 @@ export default function ExternalChatsPage() {
     setActive(null)
   }
 
+  async function handleDelete() {
+    if (!activeId) return
+    if (!confirm(t.delete_chat_confirm)) return
+    await deleteExternalChat(activeId)
+    setExternalChats(storeChats.filter((c) => c.id !== activeId))
+    setActive(null)
+    queryClient.invalidateQueries({ queryKey: ['external-chats'] })
+  }
+
   return (
     <div className={styles.page}>
       <ChatList
@@ -109,6 +118,7 @@ export default function ExternalChatsPage() {
         onSend={handleSend}
         onProfileClick={toggleProfile}
         onArchive={handleArchive}
+        onDelete={handleDelete}
       />
       {showProfile && activeChat && (
         <ClientProfile client={activeChat.client} onClose={toggleProfile} />

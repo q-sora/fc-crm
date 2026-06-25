@@ -24,6 +24,7 @@ interface Props {
   onSend: (content: string, fileId?: number) => Promise<void>
   onProfileClick: () => void
   onArchive: () => void
+  onDelete?: () => void
 }
 
 export default function ChatWindow({
@@ -34,6 +35,7 @@ export default function ChatWindow({
   onSend,
   onProfileClick,
   onArchive,
+  onDelete,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
@@ -146,6 +148,7 @@ export default function ChatWindow({
         chat={chat}
         onProfileClick={onProfileClick}
         onArchive={onArchive}
+        onDelete={onDelete}
         isArchived={chat.status === 'archived'}
       />
 

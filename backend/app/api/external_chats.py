@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, delete
 
 from app.database import get_db
 from app.models.client_profile import Channel, ClientProfile
@@ -283,6 +283,43 @@ async def unarchive_chat(
     chat.status = ChatStatus.active
     await db.commit()
     return {"ok": True, "chatId": chat_id}
+
+
+@router.delete("/chats/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_chat(
+    chat_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    chat = await db.scalar(
+        select(ExternalChat).options(selectinload(ExternalChat.client_profile)).where(ExternalChat.id == chat_id)
+    )
+    if not chat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    if not _can_access_chat(chat, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    from app.models.onboarding_session import OnboardingSession
+
+    profile = chat.client_profile
+    profile_id = profile.id if profile else None
+    profile_channel = profile.channel if profile else None
+    profile_external_id = (
+        profile.whatsapp_phone or (str(profile.telegram_user_id) if profile.telegram_user_id else None)
+    ) if profile else None
+
+    await db.execute(delete(ExternalMessage).where(ExternalMessage.chat_id == chat_id).execution_options(synchronize_session=False))
+    await db.execute(delete(ExternalChat).where(ExternalChat.id == chat_id).execution_options(synchronize_session=False))
+    if profile_id:
+        if profile_external_id:
+            await db.execute(
+                delete(OnboardingSession).where(
+                    OnboardingSession.channel == profile_channel,
+                    OnboardingSession.external_id == profile_external_id,
+                ).execution_options(synchronize_session=False)
+            )
+        await db.execute(delete(ClientProfile).where(ClientProfile.id == profile_id).execution_options(synchronize_session=False))
+    await db.commit()
 
 
 @router.get("/archive", response_model=list[ExternalChatResponse])

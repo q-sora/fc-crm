@@ -36,6 +36,7 @@ export type Translations = {
   save: string
   saving: string
 
+  delete_chat: string
   delete_chat_confirm: string
 
   forwarded_label: string
@@ -124,6 +125,7 @@ const ru: Translations = {
   save: 'Сохранить',
   saving: 'Сохранение...',
 
+  delete_chat: 'Удалить чат',
   delete_chat_confirm: 'Удалить чат? Все сообщения будут удалены.',
 
   forwarded_label: 'Переслано',
@@ -212,6 +214,7 @@ const kz: Translations = {
   save: 'Сақтау',
   saving: 'Сақталуда...',
 
+  delete_chat: 'Чатты жою',
   delete_chat_confirm: 'Чатты жою керек пе? Барлық хабарлар жойылады.',
 
   forwarded_label: 'Қайта жіберілді',

@@ -2,6 +2,7 @@ import type { ExternalChat } from '@/types'
 import IconUser from '@/components/icons/IconUser'
 import IconArchive from '@/components/icons/IconArchive'
 import IconUnarchive from '@/components/icons/IconUnarchive'
+import IconTrash from '@/components/icons/IconTrash'
 import { useT } from '@/i18n'
 import styles from './ChatHeader.module.css'
 
@@ -9,6 +10,7 @@ interface Props {
   chat: ExternalChat
   onProfileClick: () => void
   onArchive: () => void
+  onDelete?: () => void
   isArchived?: boolean
 }
 
@@ -17,7 +19,7 @@ function getInitials(name: string | null): string {
   return name.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
 }
 
-export default function ChatHeader({ chat, onProfileClick, onArchive, isArchived }: Props) {
+export default function ChatHeader({ chat, onProfileClick, onArchive, onDelete, isArchived }: Props) {
   const { client, channel } = chat
   const displayName = client.fullName ?? client.whatsappPhone ?? `TG ${client.telegramUserId}`
   const t = useT()
@@ -55,6 +57,15 @@ export default function ChatHeader({ chat, onProfileClick, onArchive, isArchived
         >
           {isArchived ? <IconUnarchive size={18} /> : <IconArchive size={18} />}
         </button>
+        {onDelete && (
+          <button
+            className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+            onClick={onDelete}
+            title={t.delete_chat}
+          >
+            <IconTrash size={18} />
+          </button>
+        )}
       </div>
     </div>
   )
