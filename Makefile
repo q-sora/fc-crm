@@ -1,5 +1,5 @@
 PROJECT := $(shell basename $(CURDIR))
-DC = docker compose
+DC := $(shell command -v docker-compose 2>/dev/null | grep -q . && echo "docker-compose" || echo "docker compose")
 
 .PHONY: up down build rebuild logs ps \
         init setup \
