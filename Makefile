@@ -1,5 +1,6 @@
 PROJECT := $(shell basename $(CURDIR))
 DC := $(shell command -v docker-compose 2>/dev/null | grep -q . && echo "docker-compose" || echo "docker compose")
+SUDO ?=
 
 .PHONY: up down build rebuild logs ps \
         init setup \
@@ -13,16 +14,16 @@ DC := $(shell command -v docker-compose 2>/dev/null | grep -q . && echo "docker-
 
 init:
 	@echo "==> Building all images..."
-	$(DC) up -d --build
+	$(SUDO) $(DC) up -d --build
 	@echo "==> Waiting for PostgreSQL..."
-	@until $(DC) exec -T postgres pg_isready -U crm_user -d fc_crm > /dev/null 2>&1; do sleep 1; done
+	@until $(SUDO) $(DC) exec -T postgres pg_isready -U crm_user -d fc_crm > /dev/null 2>&1; do sleep 1; done
 	@echo "    PostgreSQL ready."
 	@echo "==> Running migrations..."
-	$(DC) exec backend alembic upgrade head
+	$(SUDO) $(DC) exec backend alembic upgrade head
 	@echo "==> Seeding admin account..."
-	$(DC) exec backend python -m app.seeds.seed_admin
+	$(SUDO) $(DC) exec backend python -m app.seeds.seed_admin
 	@echo "==> Seeding employees and organizations..."
-	$(DC) exec backend python -m app.seeds.seed_employees
+	$(SUDO) $(DC) exec backend python -m app.seeds.seed_employees
 	@echo ""
 	@echo "Done! Open http://localhost"
 	@echo "Login: admin@fc-crm.local / Admin1234!"
@@ -31,73 +32,73 @@ init:
 # ── Lifecycle ──────────────────────────────────────────────────────────────────
 
 up:
-	$(DC) up -d
+	$(SUDO) $(DC) up -d
 
 down:
-	$(DC) down
+	$(SUDO) $(DC) down
 
 build:
-	$(DC) build
+	$(SUDO) $(DC) build
 
 rebuild:
-	$(DC) build --no-cache
+	$(SUDO) $(DC) build --no-cache
 
 ps:
-	$(DC) ps
+	$(SUDO) $(DC) ps
 
 # ── Per-service build & restart ───────────────────────────────────────────────
 
 build-backend:
-	$(DC) build backend && $(DC) rm -f backend && $(DC) up -d backend
+	$(SUDO) $(DC) build backend && $(SUDO) $(DC) rm -f backend && $(SUDO) $(DC) up -d backend
 
 build-frontend:
-	$(DC) build frontend && $(DC) rm -f frontend && $(DC) up -d frontend
+	$(SUDO) $(DC) build frontend && $(SUDO) $(DC) rm -f frontend && $(SUDO) $(DC) up -d frontend
 
 rebuild-backend:
-	$(DC) build --no-cache backend && $(DC) rm -f backend && $(DC) up -d backend
+	$(SUDO) $(DC) build --no-cache backend && $(SUDO) $(DC) rm -f backend && $(SUDO) $(DC) up -d backend
 
 rebuild-frontend:
-	$(DC) build --no-cache frontend && $(DC) rm -f frontend && $(DC) up -d frontend
+	$(SUDO) $(DC) build --no-cache frontend && $(SUDO) $(DC) rm -f frontend && $(SUDO) $(DC) up -d frontend
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 
 logs:
-	$(DC) logs -f
+	$(SUDO) $(DC) logs -f
 
 logs-backend:
-	$(DC) logs -f backend
+	$(SUDO) $(DC) logs -f backend
 
 logs-frontend:
-	$(DC) logs -f frontend
+	$(SUDO) $(DC) logs -f frontend
 
 logs-db:
-	$(DC) logs -f postgres
+	$(SUDO) $(DC) logs -f postgres
 
 logs-wa:
-	$(DC) logs -f wa-bridge
+	$(SUDO) $(DC) logs -f wa-bridge
 
 # ── Shells ────────────────────────────────────────────────────────────────────
 
 shell-backend:
-	$(DC) exec backend sh
+	$(SUDO) $(DC) exec backend sh
 
 shell-db:
-	$(DC) exec postgres psql -U crm_user -d fc_crm
+	$(SUDO) $(DC) exec postgres psql -U crm_user -d fc_crm
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
 migrate:
-	$(DC) exec backend alembic upgrade head
+	$(SUDO) $(DC) exec backend alembic upgrade head
 
 seed:
-	$(DC) exec backend python -m app.seeds.seed_admin
-	$(DC) exec backend python -m app.seeds.seed_employees
+	$(SUDO) $(DC) exec backend python -m app.seeds.seed_admin
+	$(SUDO) $(DC) exec backend python -m app.seeds.seed_employees
 
 clear-db:
-	$(DC) exec backend python -m app.seeds.clear_db
+	$(SUDO) $(DC) exec backend python -m app.seeds.clear_db
 
 reset-wa:
-	$(DC) rm -sf wa-bridge
+	$(SUDO) $(DC) rm -sf wa-bridge
 	docker volume rm $(PROJECT)_wa_session || true
-	$(DC) up -d wa-bridge
+	$(SUDO) $(DC) up -d wa-bridge
 	@echo "==> Scan QR: make logs-wa"

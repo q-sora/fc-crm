@@ -43,7 +43,7 @@ make init
 
 Команда сама соберёт все образы, дождётся PostgreSQL, применит миграции и загрузит начальные данные.
 
-**3. Открой [http://localhost](http://localhost) и войди:**
+**3. Открой и войди:**
 
 ```
 email:    admin@fc-crm.local
@@ -110,6 +110,23 @@ make build-frontend
 
 # Применить новые миграции БД
 make migrate
+```
+
+### На сервере (если нужен sudo для Docker)
+
+Если пользователь не входит в группу `docker`, все make-команды запускай с `SUDO=sudo`:
+
+```bash
+make build-backend SUDO=sudo
+make build-frontend SUDO=sudo
+make init SUDO=sudo
+```
+
+Чтобы не писать `SUDO=sudo` каждый раз, добавь пользователя в группу docker — тогда sudo не потребуется:
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
 ```
 
 ## Детальная документация
