@@ -8,6 +8,7 @@ import IconArchive from '@/components/icons/IconArchive'
 import IconAdmin from '@/components/icons/IconAdmin'
 import IconLogout from '@/components/icons/IconLogout'
 import IconUser from '@/components/icons/IconUser'
+import IconLogo from '@/components/icons/IconLogo'
 import styles from './Sidebar.module.css'
 
 export default function Sidebar() {
@@ -44,7 +45,7 @@ export default function Sidebar() {
 
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.logo}>FC</div>
+      <div className={styles.logo}><IconLogo size={50} /></div>
 
       <nav className={styles.nav}>
         {NAV_ITEMS.map((item) => (
