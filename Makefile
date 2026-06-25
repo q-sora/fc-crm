@@ -1,4 +1,5 @@
-DC = docker compose -f docker-compose.yml
+PROJECT := $(shell basename $(CURDIR))
+DC = docker compose
 
 .PHONY: up down build rebuild logs ps \
         init setup \
@@ -97,6 +98,6 @@ clear-db:
 
 reset-wa:
 	$(DC) rm -sf wa-bridge
-	docker volume rm whatsapp-crm_wa_session
+	docker volume rm $(PROJECT)_wa_session || true
 	$(DC) up -d wa-bridge
 	@echo "==> Scan QR: make logs-wa"

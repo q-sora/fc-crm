@@ -8,7 +8,7 @@ echo "==> Building and starting services..."
 docker compose up -d --build
 
 echo "==> Waiting for PostgreSQL to be ready..."
-until docker compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; do
+until docker compose exec -T postgres pg_isready -U crm_user -d fc_crm > /dev/null 2>&1; do
   sleep 1
 done
 echo "    PostgreSQL is ready."
