@@ -21,10 +21,17 @@ router = APIRouter()
 
 
 def _user_chat_filter(q, user: User):
-    """Show chats assigned to the user OR whose client belongs to the user's organizations."""
+    """Show chats assigned to the user OR whose client belongs to the user's organizations.
+    Chats with no org and no assigned employee are visible to everyone (unresolved clients)."""
+    from sqlalchemy import and_
     user_org_ids = [org.id for org in user.organizations]
     conditions = [
         ExternalChat.assigned_employee_id == user.id,
+        # No org + no assignee → visible to all employees
+        and_(
+            ExternalChat.assigned_employee_id.is_(None),
+            ExternalChat.client_profile.has(ClientProfile.organization_id.is_(None)),
+        ),
     ]
     if user_org_ids:
         conditions.append(
@@ -36,6 +43,10 @@ def _user_chat_filter(q, user: User):
 def _can_access_chat(chat: ExternalChat, user: User) -> bool:
     if chat.assigned_employee_id == user.id:
         return True
+    if chat.assigned_employee_id is None:
+        org_id = chat.client_profile.organization_id if chat.client_profile else None
+        if org_id is None:
+            return True  # unassigned + no org → visible to all
     user_org_ids = {org.id for org in user.organizations}
     org_id = chat.client_profile.organization_id if chat.client_profile else None
     return org_id is not None and org_id in user_org_ids
