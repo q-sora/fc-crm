@@ -78,7 +78,7 @@ async def cmd_start(message: types.Message):
     async with AsyncSessionLocal() as db:
         from sqlalchemy import select, delete
         from app.models.onboarding_session import OnboardingSession
-        from app.models.client_profile import ClientProfile
+        from app.models.client_profile import ClientProfile, OnboardingStep
 
         external_id = str(message.from_user.id)
 
@@ -95,6 +95,14 @@ async def cmd_start(message: types.Message):
                 OnboardingSession.external_id == external_id,
             )
         )
+        # Create session immediately so the next user message is treated as the name,
+        # not as a brand-new session that would re-trigger GREET.
+        db.add(OnboardingSession(
+            channel=Channel.telegram,
+            external_id=external_id,
+            step=OnboardingStep.ask_name,
+            collected_data={},
+        ))
         await db.commit()
 
     from app.services.onboarding import GREET

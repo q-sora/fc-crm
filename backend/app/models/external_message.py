@@ -25,8 +25,8 @@ class ExternalMessage(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     chat_id: Mapped[int] = mapped_column(ForeignKey("external_chats.id"), nullable=False, index=True)
-    direction: Mapped[MessageDirection] = mapped_column(SAEnum(MessageDirection), nullable=False)
-    message_type: Mapped[MessageType] = mapped_column(SAEnum(MessageType), nullable=False, default=MessageType.text)
+    direction: Mapped[MessageDirection] = mapped_column(SAEnum(MessageDirection, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    message_type: Mapped[MessageType] = mapped_column(SAEnum(MessageType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MessageType.text)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_id: Mapped[int | None] = mapped_column(ForeignKey("files.id"), nullable=True)
     wa_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)

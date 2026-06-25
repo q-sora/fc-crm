@@ -16,7 +16,7 @@ class InternalChat(Base):
     __tablename__ = "internal_chats"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    type: Mapped[InternalChatType] = mapped_column(SAEnum(InternalChatType), nullable=False)
+    type: Mapped[InternalChatType] = mapped_column(SAEnum(InternalChatType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

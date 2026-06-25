@@ -21,7 +21,7 @@ class InternalMessage(Base):
     sender_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     message_type: Mapped[InternalMessageType] = mapped_column(
-        SAEnum(InternalMessageType), nullable=False, default=InternalMessageType.text
+        SAEnum(InternalMessageType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=InternalMessageType.text
     )
     file_id: Mapped[int | None] = mapped_column(ForeignKey("files.id"), nullable=True)
     is_forwarded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")

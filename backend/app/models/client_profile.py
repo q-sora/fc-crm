@@ -33,9 +33,9 @@ class ClientProfile(Base):
     telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True, index=True)
     telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    channel: Mapped[Channel] = mapped_column(SAEnum(Channel), nullable=False)
+    channel: Mapped[Channel] = mapped_column(SAEnum(Channel, values_callable=lambda x: [e.value for e in x]), nullable=False)
     onboarding_step: Mapped[OnboardingStep] = mapped_column(
-        SAEnum(OnboardingStep), nullable=False, default=OnboardingStep.ask_name
+        SAEnum(OnboardingStep, values_callable=lambda x: [e.value for e in x]), nullable=False, default=OnboardingStep.ask_name
     )
     # Temporary storage during onboarding: {"name": "...", "iin": "..."}
     onboarding_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

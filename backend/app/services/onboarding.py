@@ -122,7 +122,7 @@ async def handle_incoming(
         await db.commit()
 
         if attempts >= 2:
-            # 2nd failure — create chat visible to all workers
+            # 2nd failure — create chat, assign to least-loaded admin
             await _complete_onboarding_no_org(
                 session=session,
                 channel=channel,
@@ -208,9 +208,25 @@ async def _complete_onboarding_no_org(
     tg_username: str | None,
     db: AsyncSession,
 ) -> None:
-    """Complete onboarding when org couldn't be identified — assign chat to all active workers."""
+    """Complete onboarding when org couldn't be identified — assign to an admin."""
     data = session.collected_data
     org_text = data.get("org_text", "")
+
+    # Assign to admin with fewest active chats
+    admins = (await db.scalars(
+        select(User).where(User.role == UserRole.admin, User.is_active == True)  # noqa: E712
+    )).all()
+    admin: User | None = None
+    if admins:
+        counts: dict[int, int] = {}
+        for a in admins:
+            counts[a.id] = await db.scalar(
+                select(func.count(ExternalChat.id)).where(
+                    ExternalChat.assigned_employee_id == a.id,
+                    ExternalChat.status == ChatStatus.active,
+                )
+            ) or 0
+        admin = min(admins, key=lambda a: counts[a.id])
 
     profile = ClientProfile(
         full_name=data.get("name"),
@@ -219,7 +235,7 @@ async def _complete_onboarding_no_org(
         channel=channel,
         onboarding_step=OnboardingStep.done,
         onboarding_data={},
-        assigned_employee_id=None,
+        assigned_employee_id=admin.id if admin else None,
     )
     if channel == Channel.whatsapp:
         profile.whatsapp_phone = external_id
@@ -232,7 +248,7 @@ async def _complete_onboarding_no_org(
 
     chat = ExternalChat(
         client_profile_id=profile.id,
-        assigned_employee_id=None,
+        assigned_employee_id=admin.id if admin else None,
         channel=channel,
         status=ChatStatus.active,
         last_message_at=datetime.now(timezone.utc),
@@ -254,11 +270,6 @@ async def _complete_onboarding_no_org(
     await db.commit()
     await db.refresh(chat)
 
-    # Notify ALL active employees and admins
-    all_users = (await db.scalars(
-        select(User).where(User.is_active == True)  # noqa: E712
-    )).all()
-
     ws_payload = {
         "type": "client:onboarding:done",
         "chatId": chat.id,
@@ -266,8 +277,9 @@ async def _complete_onboarding_no_org(
         "clientName": profile.full_name,
         "channel": channel.value,
     }
-    for user in all_users:
-        await manager.send_to_user(user.id, ws_payload)
+    # Notify only the assigned admin
+    if admin:
+        await manager.send_to_user(admin.id, ws_payload)
 
 
 async def _complete_onboarding(
