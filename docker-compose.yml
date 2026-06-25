@@ -30,7 +30,7 @@ services:
       WA_BRIDGE_TOKEN: ${WA_BRIDGE_TOKEN}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       UPLOAD_DIR: /app/uploads
-      MAX_FILE_SIZE_MB: 20
+      MAX_FILE_SIZE_MB: 5120
     volumes:
       - uploads_data:/app/uploads
     ports:

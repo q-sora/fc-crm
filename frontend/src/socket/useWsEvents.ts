@@ -23,34 +23,41 @@ export function useWsEvents(): void {
   useEffect(() => {
     return subscribeWs((event: WsEvent) => {
       if (event.type === 'external:message:new') {
-        const { externalChats, activeExternalChatId, incrementUnreadExternal } = useChatStore.getState()
+        const { externalChats, activeExternalChatId, activeNavPage, incrementUnreadExternal } = useChatStore.getState()
         const chatInStore = externalChats.some((c) => c.id === event.chatId)
 
         appendExternal(event.chatId, event.message)
         updateLastMsg(event.chatId)
 
         if (!chatInStore) {
-          // New chat not yet in the list — refetch so it appears
           queryClient.invalidateQueries({ queryKey: ['external-chats'] })
         }
 
-        if (event.chatId !== activeExternalChatId) {
+        // Notify unless the user is actively viewing this exact chat right now
+        const isViewingThisChat = activeNavPage === 'external' && event.chatId === activeExternalChatId
+        if (!isViewingThisChat) {
           incrementUnreadExternal(event.chatId)
           playNotification()
         }
       }
+
       if (event.type === 'client:onboarding:done') {
-        // New chat created — refresh list regardless of which page is active
         queryClient.invalidateQueries({ queryKey: ['external-chats'] })
+        // New chat from a freshly onboarded client — notify immediately
+        const { incrementUnreadExternal } = useChatStore.getState()
+        incrementUnreadExternal(event.chatId)
+        playNotification()
       }
+
       if (event.type === 'internal:message:new') {
         appendInternal(event.chatId, event.message)
         const { activeInternalChatId, activeNavPage, incrementUnreadInternal, touchInternalChat } = useChatStore.getState()
         touchInternalChat(event.chatId)
-        if (!(activeNavPage === 'internal' && event.chatId === activeInternalChatId)) {
+        const isViewingThisChat = activeNavPage === 'internal' && event.chatId === activeInternalChatId
+        if (!isViewingThisChat) {
           incrementUnreadInternal(event.chatId)
+          playNotification()
         }
-        playNotification()
       }
     })
   }, [queryClient, appendExternal, updateLastMsg, appendInternal])

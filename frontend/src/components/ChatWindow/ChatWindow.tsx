@@ -1,11 +1,12 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState, type DragEvent } from 'react'
 import type { ExternalChat, ExternalMessage } from '@/types'
 import MessageBubble from './MessageBubble'
 import ChatHeader from './ChatHeader'
-import MessageInput from '@/components/MessageInput/MessageInput'
+import MessageInput, { type MessageInputHandle } from '@/components/MessageInput/MessageInput'
 import ForwardModal from '@/components/ForwardModal/ForwardModal'
 import IconChatEmpty from '@/components/icons/IconChatEmpty'
 import IconChevronDown from '@/components/icons/IconChevronDown'
+import IconAttach from '@/components/icons/IconAttach'
 import { useT } from '@/i18n'
 import styles from './ChatWindow.module.css'
 
@@ -37,10 +38,36 @@ export default function ChatWindow({
   const bottomRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
   const separatorRef = useRef<HTMLDivElement>(null)
+  const msgInputRef = useRef<MessageInputHandle>(null)
   const [forwardTarget, setForwardTarget] = useState<{ content: string | null; fileId: number | null } | null>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [separatorIdx, setSeparatorIdx] = useState<number | null>(null)
+  const [windowDragOver, setWindowDragOver] = useState(false)
+  const dragCounterRef = useRef(0)
   const t = useT()
+
+  function handleDragEnter(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    dragCounterRef.current++
+    if (dragCounterRef.current === 1) setWindowDragOver(true)
+  }
+
+  function handleDragLeave() {
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) setWindowDragOver(false)
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+  }
+
+  async function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    dragCounterRef.current = 0
+    setWindowDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) await msgInputRef.current?.handleFileDrop(file)
+  }
 
   // Reset separator when chat changes
   useEffect(() => {
@@ -100,7 +127,21 @@ export default function ChatWindow({
   }
 
   return (
-    <div className={styles.container}>
+    <div
+      className={styles.container}
+      onDragEnter={chat && !readOnly ? handleDragEnter : undefined}
+      onDragLeave={chat && !readOnly ? handleDragLeave : undefined}
+      onDragOver={chat && !readOnly ? handleDragOver : undefined}
+      onDrop={chat && !readOnly ? handleDrop : undefined}
+    >
+      {windowDragOver && (
+        <div className={styles.dropOverlay}>
+          <div className={styles.dropOverlayInner}>
+            <IconAttach size={36} />
+            <span>{t.drop_release_hint}</span>
+          </div>
+        </div>
+      )}
       <ChatHeader
         chat={chat}
         onProfileClick={onProfileClick}
@@ -146,7 +187,7 @@ export default function ChatWindow({
         </button>
       )}
 
-      {!readOnly && <MessageInput chatId={chat.id} onSend={onSend} />}
+      {!readOnly && <MessageInput ref={msgInputRef} chatId={chat.id} onSend={onSend} showDragOverlay={false} />}
 
       {forwardTarget && (
         <ForwardModal target={forwardTarget} onClose={() => setForwardTarget(null)} />

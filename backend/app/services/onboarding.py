@@ -454,3 +454,11 @@ async def _save_incoming_message(
             if emp.id not in notified:
                 await manager.send_to_user(emp.id, ws_payload)
                 notified.add(emp.id)
+
+    # No assignee and no org — chat is visible to all, notify everyone
+    if not notified:
+        all_users = (await db.scalars(
+            select(User).where(User.is_active == True)  # noqa: E712
+        )).all()
+        for u in all_users:
+            await manager.send_to_user(u.id, ws_payload)
