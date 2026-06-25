@@ -5,6 +5,7 @@ import { getUsers } from '@/api/users'
 import type { User, InternalChat } from '@/types'
 import { useChatStore } from '@/store/chatStore'
 import { useAuthStore } from '@/store/authStore'
+import { useT } from '@/i18n'
 import MessageInput, { type MessageInputHandle } from '@/components/MessageInput/MessageInput'
 import NewChatModal from '@/components/NewChatModal/NewChatModal'
 import ForwardModal from '@/components/ForwardModal/ForwardModal'
@@ -34,6 +35,7 @@ interface EditMembersModalProps {
 }
 
 const EditMembersModal: FC<EditMembersModalProps> = ({ chat, users, currentUserId, onClose, onSave }) => {
+  const t = useT()
   const currentMemberIds = chat.members.map((m) => m.id)
   const [selected, setSelected] = useState<number[]>(currentMemberIds)
   const mutation = useMutation({ mutationFn: () => onSave(selected) })
@@ -48,7 +50,7 @@ const EditMembersModal: FC<EditMembersModalProps> = ({ chat, users, currentUserI
     <div className={styles.modalOverlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
-          <span className={styles.modalTitle}>Участники: {chat.name}</span>
+          <span className={styles.modalTitle}>{t.members_title} {chat.name}</span>
           <button className={styles.modalClose} onClick={onClose}>✕</button>
         </div>
         <div className={styles.membersList}>
@@ -64,21 +66,21 @@ const EditMembersModal: FC<EditMembersModalProps> = ({ chat, users, currentUserI
               </div>
               <div className={styles.memberInfo}>
                 <span className={styles.memberName}>
-                  {u.name}{u.id === currentUserId ? ' (Вы)' : ''}
+                  {u.name}{u.id === currentUserId ? ` ${t.you_label}` : ''}
                 </span>
-                <span className={styles.memberRole}>{u.role === 'admin' ? 'Администратор' : 'Сотрудник'}</span>
+                <span className={styles.memberRole}>{u.role === 'admin' ? t.role_admin : t.role_employee}</span>
               </div>
             </label>
           ))}
         </div>
         <div className={styles.modalFooter}>
-          <button className={styles.modalCancelBtn} onClick={onClose}>Отмена</button>
+          <button className={styles.modalCancelBtn} onClick={onClose}>{t.cancel}</button>
           <button
             className={styles.modalSaveBtn}
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
           >
-            {mutation.isPending ? 'Сохранение...' : 'Сохранить'}
+            {mutation.isPending ? t.saving : t.save}
           </button>
         </div>
       </div>
@@ -87,6 +89,7 @@ const EditMembersModal: FC<EditMembersModalProps> = ({ chat, users, currentUserI
 }
 
 export default function InternalChatsPage() {
+  const t = useT()
   const currentUser = useAuthStore((s) => s.user)
   const bottomRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
@@ -247,7 +250,7 @@ export default function InternalChatsPage() {
 
   async function handleDeleteChat() {
     if (!activeId) return
-    if (!confirm('Удалить чат? Все сообщения будут удалены.')) return
+    if (!confirm(t.delete_chat_confirm)) return
     await deleteInternalChat(activeId)
     setActive(null)
     await qc.invalidateQueries({ queryKey: ['internal-chats'] })
@@ -272,14 +275,14 @@ export default function InternalChatsPage() {
     if (activeChat.type === 'group') {
       return {
         initials: null as string | null,
-        name: activeChat.name ?? 'Группа',
+        name: activeChat.name ?? t.mode_group,
         sub: `${activeChat.members.length} участников`,
         isGroup: true,
       }
     }
     const other = activeChat.members.find((m) => m.id !== currentUser?.id)
     const otherUser = users.find((u) => u.id === other?.id)
-    const roleLabel = otherUser?.role === 'admin' ? 'Администратор' : 'Сотрудник'
+    const roleLabel = otherUser?.role === 'admin' ? t.role_admin : t.role_employee
     const initials = other
       ? other.name.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
       : '?'
@@ -296,8 +299,8 @@ export default function InternalChatsPage() {
       <div className={styles.chatListPanel}>
         <div className={styles.listHeader}>
           <div className={styles.listHeaderRow}>
-            <span className={styles.listTitle}>Команда</span>
-            <button className={styles.newChatBtn} onClick={() => setShowNewChat(true)} title="Новый чат">
+            <span className={styles.listTitle}>{t.internal_chats_title}</span>
+            <button className={styles.newChatBtn} onClick={() => setShowNewChat(true)} title={t.new_chat}>
               <IconPlus size={16} />
             </button>
           </div>
@@ -306,7 +309,7 @@ export default function InternalChatsPage() {
             <input
               className={styles.search}
               type="text"
-              placeholder="Поиск..."
+              placeholder={t.search_placeholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -314,7 +317,7 @@ export default function InternalChatsPage() {
         </div>
         <div className={styles.chatItems}>
           {filteredChats.length === 0 && (
-            <div className={styles.empty}>{search ? 'Чаты не найдены' : 'Нет чатов'}</div>
+            <div className={styles.empty}>{search ? t.chats_not_found : t.no_chats}</div>
           )}
           {filteredChats.map((chat) => (
             <button
@@ -361,14 +364,14 @@ export default function InternalChatsPage() {
           <div className={styles.windowDropOverlay}>
             <div className={styles.windowDropOverlayInner}>
               <IconAttach size={36} />
-              <span>Перетащите файл для отправки</span>
+              <span>{t.drop_file_hint}</span>
             </div>
           </div>
         )}
         {!activeChat ? (
           <div className={styles.placeholder}>
             <IconGroup size={40} />
-            Выберите чат
+            {t.select_internal_chat}
           </div>
         ) : (
           <>
@@ -408,7 +411,7 @@ export default function InternalChatsPage() {
                     {separatorIdx !== null && idx === separatorIdx && (
                       <div ref={separatorRef} className={styles.unreadSeparator}>
                         <div className={styles.unreadSeparatorLine} />
-                        <span className={styles.unreadSeparatorLabel}>Непрочитанные</span>
+                        <span className={styles.unreadSeparatorLabel}>{t.unread_separator}</span>
                         <div className={styles.unreadSeparatorLine} />
                       </div>
                     )}
@@ -433,7 +436,7 @@ export default function InternalChatsPage() {
                         {!isMine && isFirstInGroup && (
                           <div className={styles.senderName}>{msg.senderName}</div>
                         )}
-                        {msg.isForwarded && <div className={styles.forwardedLabel}>Переслано</div>}
+                        {msg.isForwarded && <div className={styles.forwardedLabel}>{t.forwarded_label}</div>}
                         {msg.file && msg.file.mimeType.startsWith('image/') && (
                           <>
                             <img
@@ -460,7 +463,7 @@ export default function InternalChatsPage() {
                             <div className={styles.fileIconCircle}><IconFile size={28} /></div>
                             <div className={styles.fileInfo}>
                               <span className={styles.fileName}>{msg.file.originalName}</span>
-                              <span className={styles.fileDownloadHint}>Скачать</span>
+                              <span className={styles.fileDownloadHint}>{t.download_hint}</span>
                             </div>
                           </a>
                         )}

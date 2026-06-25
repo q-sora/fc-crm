@@ -6,6 +6,7 @@ import MessageInput from '@/components/MessageInput/MessageInput'
 import ForwardModal from '@/components/ForwardModal/ForwardModal'
 import IconChatEmpty from '@/components/icons/IconChatEmpty'
 import IconChevronDown from '@/components/icons/IconChevronDown'
+import { useT } from '@/i18n'
 import styles from './ChatWindow.module.css'
 
 interface ScrollSignal {
@@ -39,6 +40,7 @@ export default function ChatWindow({
   const [forwardTarget, setForwardTarget] = useState<{ content: string | null; fileId: number | null } | null>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [separatorIdx, setSeparatorIdx] = useState<number | null>(null)
+  const t = useT()
 
   // Reset separator when chat changes
   useEffect(() => {
@@ -92,7 +94,7 @@ export default function ChatWindow({
     return (
       <div className={styles.placeholder}>
         <span className={styles.placeholderIcon}><IconChatEmpty size={56} /></span>
-        Выберите чат для начала работы
+        {t.select_chat}
       </div>
     )
   }
@@ -110,7 +112,7 @@ export default function ChatWindow({
         {messages.length === 0 && (
           <div className={styles.empty}>
             <span className={styles.emptyIcon}><IconChatEmpty size={48} /></span>
-            Нет сообщений
+            {t.no_messages}
           </div>
         )}
         {messages.map((msg, idx) => (
@@ -118,7 +120,7 @@ export default function ChatWindow({
             {separatorIdx !== null && idx === separatorIdx && (
               <div ref={separatorRef} className={styles.unreadSeparator}>
                 <div className={styles.unreadSeparatorLine} />
-                <span className={styles.unreadSeparatorLabel}>Непрочитанные</span>
+                <span className={styles.unreadSeparatorLabel}>{t.unread_separator}</span>
                 <div className={styles.unreadSeparatorLine} />
               </div>
             )}

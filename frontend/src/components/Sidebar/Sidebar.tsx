@@ -1,6 +1,8 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useChatStore } from '@/store/chatStore'
+import { useLangStore } from '@/store/langStore'
+import { useT } from '@/i18n'
 import { disconnectWs } from '@/socket/socket'
 import IconChats from '@/components/icons/IconChats'
 import IconTeam from '@/components/icons/IconTeam'
@@ -17,6 +19,9 @@ export default function Sidebar() {
   const user = useAuthStore((s) => s.user)
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const isAdmin = user?.role === 'admin'
+  const lang = useLangStore((s) => s.lang)
+  const toggleLang = useLangStore((s) => s.toggleLang)
+  const t = useT()
 
   const unreadExternal = useChatStore((s) => s.unreadExternal)
   const unreadInternal = useChatStore((s) => s.unreadInternal)
@@ -38,9 +43,9 @@ export default function Sidebar() {
     .toUpperCase() || null
 
   const NAV_ITEMS = [
-    { path: '/chats/external', icon: <IconChats />, label: 'Клиенты', badge: totalExternal },
-    { path: '/chats/internal', icon: <IconTeam />, label: 'Команда', badge: totalInternal },
-    { path: '/chats/archive', icon: <IconArchive />, label: 'Архив', badge: 0 },
+    { path: '/chats/external', icon: <IconChats />, label: t.nav_clients, badge: totalExternal },
+    { path: '/chats/internal', icon: <IconTeam />, label: t.nav_team, badge: totalInternal },
+    { path: '/chats/archive', icon: <IconArchive />, label: t.nav_archive, badge: 0 },
   ]
 
   return (
@@ -68,12 +73,12 @@ export default function Sidebar() {
           <button
             className={`${styles.navItem} ${pathname.startsWith('/admin') ? styles.active : ''}`}
             onClick={() => navigate('/admin')}
-            title="Админ панель"
+            title={t.nav_admin}
           >
             <span className={styles.navIconWrap}>
               <span className={styles.navIcon}><IconAdmin /></span>
             </span>
-            Админ
+            {t.nav_admin}
           </button>
         )}
       </nav>
@@ -83,9 +88,19 @@ export default function Sidebar() {
         <div className={styles.avatarBtn} title={user?.name}>
           {initials ?? <IconUser size={20} />}
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout} title="Выйти">
+        <div className={styles.langToggle}>
+          <button
+            className={`${styles.langOpt} ${lang === 'ru' ? styles.langOptActive : ''}`}
+            onClick={() => lang !== 'ru' && toggleLang()}
+          >RU</button>
+          <button
+            className={`${styles.langOpt} ${lang === 'kz' ? styles.langOptActive : ''}`}
+            onClick={() => lang !== 'kz' && toggleLang()}
+          >KZ</button>
+        </div>
+        <button className={styles.logoutBtn} onClick={handleLogout} title={t.nav_logout}>
           <span className={styles.logoutIcon}><IconLogout /></span>
-          Выйти
+          {t.nav_logout}
         </button>
       </div>
     </aside>

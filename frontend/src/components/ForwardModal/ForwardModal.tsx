@@ -4,6 +4,7 @@ import { getInternalChats, sendInternalMessage } from '@/api/internalChats'
 import { getExternalChats, sendExternalMessage } from '@/api/externalChats'
 import { useAuthStore } from '@/store/authStore'
 import type { InternalChat, ExternalChat } from '@/types'
+import { useT } from '@/i18n'
 import styles from './ForwardModal.module.css'
 
 interface ForwardTarget {
@@ -32,6 +33,7 @@ function getExternalLabel(chat: ExternalChat): string {
 
 export default function ForwardModal({ target, onClose }: Props) {
   const me = useAuthStore((s) => s.user)
+  const t = useT()
   const [tab, setTab] = useState<Tab>('internal')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState<string | null>(null)
@@ -88,12 +90,12 @@ export default function ForwardModal({ target, onClose }: Props) {
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <span className={styles.title}>Переслать сообщение</span>
+          <span className={styles.title}>{t.forward_message}</span>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
 
         {sent ? (
-          <div className={styles.sentMsg}>Отправлено в «{sent}»</div>
+          <div className={styles.sentMsg}>{t.forward_sent(sent)}</div>
         ) : (
           <>
             <div className={styles.tabs}>
@@ -101,20 +103,20 @@ export default function ForwardModal({ target, onClose }: Props) {
                 className={`${styles.tab} ${tab === 'internal' ? styles.activeTab : ''}`}
                 onClick={() => setTab('internal')}
               >
-                Команда
+                {t.forward_team}
               </button>
               <button
                 className={`${styles.tab} ${tab === 'external' ? styles.activeTab : ''}`}
                 onClick={() => setTab('external')}
               >
-                Клиенты
+                {t.forward_clients}
               </button>
             </div>
 
             <div className={styles.list}>
               {tab === 'internal' && (
                 internalChats.length === 0
-                  ? <div className={styles.empty}>Нет внутренних чатов</div>
+                  ? <div className={styles.empty}>{t.no_internal_chats}</div>
                   : internalChats.map((chat) => (
                     <button
                       key={chat.id}
@@ -128,7 +130,7 @@ export default function ForwardModal({ target, onClose }: Props) {
               )}
               {tab === 'external' && (
                 externalChats.length === 0
-                  ? <div className={styles.empty}>Нет доступных клиентских чатов</div>
+                  ? <div className={styles.empty}>{t.no_external_chats}</div>
                   : externalChats.map((chat) => (
                     <button
                       key={chat.id}

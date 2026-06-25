@@ -4,6 +4,7 @@ import QuickPhrasesList from '@/components/QuickPhrases/QuickPhrasesList'
 import IconAttach from '@/components/icons/IconAttach'
 import IconBolt from '@/components/icons/IconBolt'
 import IconSend from '@/components/icons/IconSend'
+import { useT } from '@/i18n'
 import styles from './MessageInput.module.css'
 
 export interface MessageInputHandle {
@@ -18,6 +19,7 @@ interface Props {
 
 const MessageInput = forwardRef<MessageInputHandle, Props>(
   ({ chatId, onSend, showDragOverlay = true }, ref) => {
+    const t = useT()
     const [text, setText] = useState('')
     const [fileId, setFileId] = useState<number | null>(null)
     const [fileName, setFileName] = useState<string | null>(null)
@@ -38,7 +40,7 @@ const MessageInput = forwardRef<MessageInputHandle, Props>(
         setFileId(uploaded.id)
         setFileName(file.name)
       } catch {
-        setUploadError('Не удалось загрузить файл. Проверьте размер (макс. 100 МБ).')
+        setUploadError(t.upload_error)
       } finally {
         setUploading(false)
       }
@@ -130,7 +132,7 @@ const MessageInput = forwardRef<MessageInputHandle, Props>(
           <div className={styles.dropOverlay}>
             <div className={styles.dropOverlayInner}>
               <IconAttach size={32} />
-              <span>Отпустите файл для загрузки</span>
+              <span>{t.drop_release_hint}</span>
             </div>
           </div>
         )}
@@ -157,7 +159,7 @@ const MessageInput = forwardRef<MessageInputHandle, Props>(
           <button
             className={styles.iconBtn}
             onClick={() => fileInputRef.current?.click()}
-            title="Прикрепить файл"
+            title={t.attach_file}
             disabled={uploading}
           >
             <IconAttach size={20} />
@@ -175,7 +177,7 @@ const MessageInput = forwardRef<MessageInputHandle, Props>(
               ref={textareaRef}
               className={styles.textarea}
               rows={1}
-              placeholder="Введите сообщение..."
+              placeholder={t.message_placeholder}
               value={text}
               onChange={autoResize}
               onKeyDown={handleKeyDown}
@@ -183,7 +185,7 @@ const MessageInput = forwardRef<MessageInputHandle, Props>(
             <button
               className={styles.phrasesToggle}
               onClick={() => setShowPhrases((v) => !v)}
-              title="Шаблонные фразы"
+              title={t.quick_phrases}
               type="button"
             >
               <IconBolt size={18} />

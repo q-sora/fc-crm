@@ -2,11 +2,13 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login, getMe } from '@/api/auth'
 import { useAuthStore } from '@/store/authStore'
+import { useT } from '@/i18n'
 import styles from './LoginPage.module.css'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
+  const t = useT()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +25,7 @@ export default function LoginPage() {
       setAuth(accessToken, user)
       navigate('/chats/external')
     } catch {
-      setError('Неверный email или пароль')
+      setError(t.login_error)
     } finally {
       setLoading(false)
     }
@@ -34,7 +36,7 @@ export default function LoginPage() {
       <div className={styles.card}>
         <div className={styles.logo}>
           <div className={styles.logoText}>FC CRM</div>
-          <div className={styles.logoSub}>Корпоративная система коммуникаций</div>
+          <div className={styles.logoSub}>{t.login_subtitle}</div>
         </div>
         <form className={styles.form} onSubmit={handleSubmit}>
           <div className={styles.field}>
@@ -50,7 +52,7 @@ export default function LoginPage() {
             />
           </div>
           <div className={styles.field}>
-            <label className={styles.label}>Пароль</label>
+            <label className={styles.label}>{t.login_password}</label>
             <input
               className={styles.input}
               type="password"
@@ -62,7 +64,7 @@ export default function LoginPage() {
           </div>
           {error && <div className={styles.error}>{error}</div>}
           <button className={styles.button} type="submit" disabled={loading}>
-            {loading ? 'Вход...' : 'Войти'}
+            {loading ? t.login_loading : t.login_submit}
           </button>
         </form>
       </div>

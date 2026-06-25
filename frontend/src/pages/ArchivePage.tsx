@@ -5,10 +5,12 @@ import { useChatStore } from '@/store/chatStore'
 import ChatList from '@/components/ChatList/ChatList'
 import ChatWindow from '@/components/ChatWindow/ChatWindow'
 import ClientProfile from '@/components/ClientProfile/ClientProfile'
+import { useT } from '@/i18n'
 import styles from './ArchivePage.module.css'
 
 export default function ArchivePage() {
   const queryClient = useQueryClient()
+  const t = useT()
 
   const activeId = useChatStore((s) => s.activeExternalChatId)
   const setActive = useChatStore((s) => s.setActiveExternalChat)
@@ -41,7 +43,7 @@ export default function ArchivePage() {
       <ChatList
         chats={chats}
         activeChatId={activeId}
-        title="Архив"
+        title={t.archive_title}
         onSelect={setActive}
       />
       <ChatWindow

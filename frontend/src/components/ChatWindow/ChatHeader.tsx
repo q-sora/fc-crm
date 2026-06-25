@@ -2,6 +2,7 @@ import type { ExternalChat } from '@/types'
 import IconUser from '@/components/icons/IconUser'
 import IconArchive from '@/components/icons/IconArchive'
 import IconUnarchive from '@/components/icons/IconUnarchive'
+import { useT } from '@/i18n'
 import styles from './ChatHeader.module.css'
 
 interface Props {
@@ -19,10 +20,11 @@ function getInitials(name: string | null): string {
 export default function ChatHeader({ chat, onProfileClick, onArchive, isArchived }: Props) {
   const { client, channel } = chat
   const displayName = client.fullName ?? client.whatsappPhone ?? `TG ${client.telegramUserId}`
+  const t = useT()
 
   return (
     <div className={styles.header}>
-      <div className={styles.avatar} onClick={onProfileClick} title="Профиль клиента">
+      <div className={styles.avatar} onClick={onProfileClick} title={t.client_profile}>
         {getInitials(client.fullName)}
       </div>
 
@@ -42,14 +44,14 @@ export default function ChatHeader({ chat, onProfileClick, onArchive, isArchived
         <button
           className={styles.actionBtn}
           onClick={onProfileClick}
-          title="Профиль клиента"
+          title={t.client_profile}
         >
           <IconUser size={18} />
         </button>
         <button
           className={styles.actionBtn}
           onClick={onArchive}
-          title={isArchived ? 'Разархивировать' : 'Архивировать'}
+          title={isArchived ? t.unarchive_chat : t.archive_chat}
         >
           {isArchived ? <IconUnarchive size={18} /> : <IconArchive size={18} />}
         </button>

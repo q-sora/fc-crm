@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ExternalChat } from '@/types'
 import ChatListItem from './ChatListItem'
 import IconSearch from '@/components/icons/IconSearch'
+import { useT } from '@/i18n'
 import styles from './ChatList.module.css'
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 
 export default function ChatList({ chats, activeChatId, title, unreadCounts = {}, onSelect }: Props) {
   const [search, setSearch] = useState('')
+  const t = useT()
 
   const filtered = chats.filter((c) => {
     const q = search.toLowerCase()
@@ -33,7 +35,7 @@ export default function ChatList({ chats, activeChatId, title, unreadCounts = {}
           <input
             className={styles.search}
             type="text"
-            placeholder="Поиск..."
+            placeholder={t.search_placeholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -42,7 +44,7 @@ export default function ChatList({ chats, activeChatId, title, unreadCounts = {}
 
       <div className={styles.list}>
         {filtered.length === 0 && (
-          <div className={styles.empty}>Чаты не найдены</div>
+          <div className={styles.empty}>{t.chats_not_found}</div>
         )}
         {filtered.map((chat) => (
           <ChatListItem

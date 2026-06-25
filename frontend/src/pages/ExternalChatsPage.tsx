@@ -6,6 +6,7 @@ import { subscribeWs } from '@/socket/socket'
 import ChatList from '@/components/ChatList/ChatList'
 import ChatWindow from '@/components/ChatWindow/ChatWindow'
 import ClientProfile from '@/components/ClientProfile/ClientProfile'
+import { useT } from '@/i18n'
 import styles from './ExternalChatsPage.module.css'
 
 interface ScrollSignal {
@@ -16,6 +17,7 @@ interface ScrollSignal {
 
 export default function ExternalChatsPage() {
   const queryClient = useQueryClient()
+  const t = useT()
   const unreadAtOpenRef = useRef(0)
   const [scrollSignal, setScrollSignal] = useState<ScrollSignal | null>(null)
   const setActiveNavPage = useChatStore((s) => s.setActiveNavPage)
@@ -96,7 +98,7 @@ export default function ExternalChatsPage() {
       <ChatList
         chats={storeChats}
         activeChatId={activeId}
-        title="Чаты с клиентами"
+        title={t.external_chats_title}
         unreadCounts={unreadExternal}
         onSelect={handleSelectChat}
       />

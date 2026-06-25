@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { User } from '@/types'
+import { useT } from '@/i18n'
 import styles from './NewChatModal.module.css'
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 type Mode = 'direct' | 'group'
 
 export default function NewChatModal({ currentUserId, users, onClose, onCreate }: Props) {
+  const t = useT()
   const [mode, setMode] = useState<Mode>('direct')
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [groupName, setGroupName] = useState('')
@@ -35,14 +37,14 @@ export default function NewChatModal({ currentUserId, users, onClose, onCreate }
   }
 
   async function handleCreate() {
-    if (selectedIds.length === 0) { setError('Выберите участника'); return }
-    if (mode === 'group' && !groupName.trim()) { setError('Введите название группы'); return }
+    if (selectedIds.length === 0) { setError(t.select_participant); return }
+    if (mode === 'group' && !groupName.trim()) { setError(t.enter_group_name); return }
     setError(null)
     setLoading(true)
     try {
       await onCreate(mode, selectedIds, mode === 'group' ? groupName.trim() : undefined)
     } catch {
-      setError('Ошибка создания чата')
+      setError(t.create_error)
     } finally {
       setLoading(false)
     }
@@ -52,7 +54,7 @@ export default function NewChatModal({ currentUserId, users, onClose, onCreate }
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <span className={styles.title}>Новый чат</span>
+          <span className={styles.title}>{t.new_chat_title}</span>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
 
@@ -61,13 +63,13 @@ export default function NewChatModal({ currentUserId, users, onClose, onCreate }
             className={`${styles.modeTab} ${mode === 'direct' ? styles.active : ''}`}
             onClick={() => { setMode('direct'); setSelectedIds([]) }}
           >
-            Личный
+            {t.mode_direct}
           </button>
           <button
             className={`${styles.modeTab} ${mode === 'group' ? styles.active : ''}`}
             onClick={() => { setMode('group'); setSelectedIds([]) }}
           >
-            Группа
+            {t.mode_group}
           </button>
         </div>
 
@@ -76,7 +78,7 @@ export default function NewChatModal({ currentUserId, users, onClose, onCreate }
             className={styles.nameInput}
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
-            placeholder="Название группы"
+            placeholder={t.group_name_placeholder}
           />
         )}
 
@@ -85,14 +87,14 @@ export default function NewChatModal({ currentUserId, users, onClose, onCreate }
             className={styles.searchInput}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по имени..."
+            placeholder={t.search_by_name}
           />
         </div>
 
         <div className={styles.userList}>
           {filtered.length === 0 && (
             <div className={styles.empty}>
-              {colleagues.length === 0 ? 'Нет других сотрудников' : 'Никого не найдено'}
+              {colleagues.length === 0 ? t.no_colleagues : t.no_one_found}
             </div>
           )}
           {filtered.map((u) => {
@@ -109,7 +111,7 @@ export default function NewChatModal({ currentUserId, users, onClose, onCreate }
                 <div className={styles.userInfo}>
                   <div className={styles.userName}>{u.name}</div>
                   <div className={styles.userRole}>
-                    {u.role === 'admin' ? 'Администратор' : 'Сотрудник'}
+                    {u.role === 'admin' ? t.role_admin : t.role_employee}
                   </div>
                 </div>
                 {selected && <span className={styles.check}>✓</span>}
@@ -121,9 +123,9 @@ export default function NewChatModal({ currentUserId, users, onClose, onCreate }
         {error && <div className={styles.error}>{error}</div>}
 
         <div className={styles.actions}>
-          <button className={styles.cancelBtn} onClick={onClose}>Отмена</button>
+          <button className={styles.cancelBtn} onClick={onClose}>{t.cancel}</button>
           <button className={styles.createBtn} onClick={handleCreate} disabled={loading}>
-            {loading ? 'Создание...' : 'Создать'}
+            {loading ? t.creating : t.create_btn}
           </button>
         </div>
       </div>

@@ -4,6 +4,7 @@ import IconAttach from '@/components/icons/IconAttach'
 import IconFile from '@/components/icons/IconFile'
 import IconForward from '@/components/icons/IconForward'
 import ImageLightbox from '@/components/ImageLightbox/ImageLightbox'
+import { useT } from '@/i18n'
 import styles from './MessageBubble.module.css'
 
 interface Props {
@@ -17,6 +18,7 @@ function formatTime(iso: string): string {
 
 export default function MessageBubble({ message, onForward }: Props) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const t = useT()
   const isOut = message.direction === 'out'
   const { file, content, messageType, sentAt, isForwarded } = message
 
@@ -26,7 +28,7 @@ export default function MessageBubble({ message, onForward }: Props) {
   const forwardBtn = onForward && (
     <button
       className={`${styles.forwardBtn} ${isOut ? styles.forwardBtnOut : styles.forwardBtnIn}`}
-      title="Переслать"
+      title={t.forwarded_label}
       onClick={() => onForward(content, file?.id ?? null)}
     >
       <IconForward size={14} />
@@ -38,7 +40,7 @@ export default function MessageBubble({ message, onForward }: Props) {
       <div className={`${styles.wrapper} ${isOut ? styles.out : styles.in}`}>
         {isOut && forwardBtn}
         <div className={`${styles.bubble} ${isImage || isVideo ? styles.mediaBubble : ''}`}>
-          {isForwarded && <div className={styles.forwardedLabel}>Переслано</div>}
+          {isForwarded && <div className={styles.forwardedLabel}>{t.forwarded_label}</div>}
           {isImage && (
             <img
               className={styles.image}
@@ -60,7 +62,7 @@ export default function MessageBubble({ message, onForward }: Props) {
               <div className={styles.fileIconCircle}><IconFile size={28} /></div>
               <div className={styles.fileInfo}>
                 <span className={styles.fileName}>{file.originalName}</span>
-                <span className={styles.fileDownloadHint}>Скачать</span>
+                <span className={styles.fileDownloadHint}>{t.download_hint}</span>
               </div>
             </a>
           )}

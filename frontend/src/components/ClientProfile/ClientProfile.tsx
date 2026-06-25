@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getOrganizations } from '@/api/organizations'
 import { updateClient } from '@/api/clients'
 import type { ClientProfile as ClientProfileType } from '@/types'
+import { useT } from '@/i18n'
 import styles from './ClientProfile.module.css'
 
 interface Props {
@@ -30,6 +31,7 @@ function formatDate(iso: string): string {
 
 export default function ClientProfile({ client, onClose }: Props) {
   const displayName = client.fullName ?? client.whatsappPhone ?? `TG ${client.telegramUserId}`
+  const t = useT()
   const qc = useQueryClient()
   const [editOrg, setEditOrg] = useState(false)
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(client.organization?.id ?? null)
@@ -68,8 +70,8 @@ export default function ClientProfile({ client, onClose }: Props) {
   return (
     <aside className={styles.panel}>
       <div className={styles.header}>
-        <span className={styles.headerTitle}>Профиль клиента</span>
-        <button className={styles.closeBtn} onClick={onClose} title="Закрыть">✕</button>
+        <span className={styles.headerTitle}>{t.profile_title}</span>
+        <button className={styles.closeBtn} onClick={onClose} title="✕">✕</button>
       </div>
 
       <div className={styles.avatarSection}>
@@ -82,18 +84,18 @@ export default function ClientProfile({ client, onClose }: Props) {
 
       <div className={styles.fields}>
         <div className={styles.field}>
-          <span className={styles.fieldLabel}>ФИО</span>
+          <span className={styles.fieldLabel}>{t.field_fullname}</span>
           {client.fullName
             ? <span className={styles.fieldValue}>{client.fullName}</span>
-            : <span className={styles.fieldValueEmpty}>Не указано</span>
+            : <span className={styles.fieldValueEmpty}>{t.not_specified}</span>
           }
         </div>
 
         <div className={styles.field}>
-          <span className={styles.fieldLabel}>ИИН</span>
+          <span className={styles.fieldLabel}>{t.field_iin}</span>
           {client.iin
             ? <span className={styles.fieldValue}>{client.iin}</span>
-            : <span className={styles.fieldValueEmpty}>Не указан</span>
+            : <span className={styles.fieldValueEmpty}>{t.not_specified_m}</span>
           }
         </div>
 
@@ -101,10 +103,10 @@ export default function ClientProfile({ client, onClose }: Props) {
 
         <div className={styles.field}>
           <div className={styles.fieldLabelRow}>
-            <span className={styles.fieldLabel}>Организация</span>
+            <span className={styles.fieldLabel}>{t.field_org}</span>
             {!editOrg && (
               <button className={styles.editOrgBtn} onClick={handleEditOrg}>
-                {client.organization ? 'Изменить' : 'Указать'}
+                {client.organization ? t.org_change : t.org_set}
               </button>
             )}
           </div>
@@ -113,7 +115,7 @@ export default function ClientProfile({ client, onClose }: Props) {
             <div className={styles.orgEditRow}>
               <input
                 className={styles.orgSearchInput}
-                placeholder="Поиск организации..."
+                placeholder={t.org_search_placeholder}
                 value={orgSearch}
                 onChange={(e) => setOrgSearch(e.target.value)}
                 autoFocus
@@ -123,7 +125,7 @@ export default function ClientProfile({ client, onClose }: Props) {
                   className={`${styles.orgListItem} ${selectedOrgId === null ? styles.orgListItemSelected : ''}`}
                   onClick={() => setSelectedOrgId(null)}
                 >
-                  — Не указана —
+                  {t.org_not_set}
                 </div>
                 {filteredOrgs.map((o) => (
                   <div
@@ -135,7 +137,7 @@ export default function ClientProfile({ client, onClose }: Props) {
                   </div>
                 ))}
                 {filteredOrgs.length === 0 && orgSearch && (
-                  <div className={styles.orgListEmpty}>Не найдено</div>
+                  <div className={styles.orgListEmpty}>{t.org_not_found}</div>
                 )}
               </div>
               <div className={styles.orgActionRow}>
@@ -144,30 +146,30 @@ export default function ClientProfile({ client, onClose }: Props) {
                   onClick={handleOrgSave}
                   disabled={orgMutation.isPending}
                 >
-                  {orgMutation.isPending ? '...' : 'Сохранить'}
+                  {orgMutation.isPending ? '...' : t.save}
                 </button>
                 <button className={styles.orgCancelBtn} onClick={() => setEditOrg(false)}>
-                  Отмена
+                  {t.cancel}
                 </button>
               </div>
             </div>
           ) : (
             client.organization
               ? <span className={styles.fieldValue}>{client.organization.name}</span>
-              : <span className={styles.fieldValueEmpty}>Не указана</span>
+              : <span className={styles.fieldValueEmpty}>{t.not_specified_f}</span>
           )}
         </div>
 
         {client.whatsappPhone && cleanPhone(client.whatsappPhone) && (
           <div className={styles.field}>
-            <span className={styles.fieldLabel}>Телефон</span>
+            <span className={styles.fieldLabel}>{t.field_phone}</span>
             <span className={styles.fieldValue}>+{cleanPhone(client.whatsappPhone)}</span>
           </div>
         )}
 
         {client.telegramUsername && (
           <div className={styles.field}>
-            <span className={styles.fieldLabel}>Telegram</span>
+            <span className={styles.fieldLabel}>{t.field_telegram}</span>
             <span className={styles.fieldValue}>@{client.telegramUsername}</span>
           </div>
         )}
@@ -175,7 +177,7 @@ export default function ClientProfile({ client, onClose }: Props) {
         <div className={styles.divider} />
 
         <div className={styles.field}>
-          <span className={styles.fieldLabel}>Первое обращение</span>
+          <span className={styles.fieldLabel}>{t.field_first_contact}</span>
           <span className={styles.fieldValue}>{formatDate(client.createdAt)}</span>
         </div>
       </div>
